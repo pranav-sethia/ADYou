@@ -3,36 +3,33 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  Drawing workflow state                                            */
-/* ------------------------------------------------------------------ */
-
-export type DrawingPhase = "idle" | "property" | "adu";
-
-/* ------------------------------------------------------------------ */
 /*  API contract (mirrors backend Pydantic models)                    */
 /* ------------------------------------------------------------------ */
 
 export interface GeoJSONGeometry {
-    type: "Polygon";
-    coordinates: number[][][];
+    type: "Polygon" | "MultiPolygon";
+    coordinates: number[][][] | number[][][][];
 }
 
 export interface ValidationRequest {
     property_boundary: GeoJSONGeometry;
-    adu_box: GeoJSONGeometry;
     location: string;
 }
 
 export interface ObstacleDetail {
     name: string;
-    overlap_pct: number;
+    area_sqft: number;
 }
 
 export interface ValidationResponse {
     is_valid: boolean;
     message: string;
-    area_sqft: number;
-    est_cost: number | null;
-    violations: string[];
+    property_area_sqft: number;
+    buildable_area_sqft: number;
+    setback_ft: number;
+    max_adu_sqft: number;
+    est_cost_low: number | null;
+    est_cost_high: number | null;
     obstacles: ObstacleDetail[];
+    buildable_zone_geojson: GeoJSONGeometry | null;
 }

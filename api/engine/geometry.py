@@ -5,7 +5,8 @@ All spatial math is performed in EPSG:2230 (NAD83 / California zone 6, US feet)
 to guarantee accurate area and distance calculations for southern California.
 """
 
-from shapely.geometry import Polygon, shape
+from shapely.geometry import Polygon, MultiPolygon, shape, mapping
+from shapely.ops import unary_union
 from pyproj import Transformer
 
 # ---------------------------------------------------------------------------
@@ -19,18 +20,44 @@ _TO_FEET = Transformer.from_crs("EPSG:4326", "EPSG:2230", always_xy=True)
 _TO_WGS84 = Transformer.from_crs("EPSG:2230", "EPSG:4326", always_xy=True)
 
 
-def geojson_to_shapely(geojson_geometry: dict) -> Polygon:
-    """Convert a GeoJSON Geometry dict to a Shapely Polygon."""
+def geojson_to_shapely(geojson_geometry: dict) -> Polygon | MultiPolygon:
+    """Convert a GeoJSON Geometry dict to a Shapely Polygon/MultiPolygon."""
     return shape(geojson_geometry)
 
 
-def project_to_feet(polygon: Polygon) -> Polygon:
+def shapely_to_geojson(geom: Polygon | MultiPolygon) -> dict:
+    """Convert a Shapely geometry back to a GeoJSON dict."""
+    return mapping(geom)
+
+
+def project_to_feet(polygon: Polygon | MultiPolygon) -> Polygon | MultiPolygon:
     """Re-project a WGS-84 polygon to EPSG:2230 (US feet)."""
-    projected_coords: list[tuple[float, float]] = []
-    for lng, lat in polygon.exterior.coords:
-        x, y = _TO_FEET.transform(lng, lat)
-        projected_coords.append((x, y))
-    return Polygon(projected_coords)
+    if isinstance(polygon, MultiPolygon):
+        return MultiPolygon([project_to_feet(p) for p in polygon.geoms])
+
+    projected_exterior = [
+        _TO_FEET.transform(lng, lat) for lng, lat in polygon.exterior.coords
+    ]
+    projected_interiors = [
+        [_TO_FEET.transform(lng, lat) for lng, lat in ring.coords]
+        for ring in polygon.interiors
+    ]
+    return Polygon(projected_exterior, projected_interiors)
+
+
+def project_to_wgs84(polygon: Polygon | MultiPolygon) -> Polygon | MultiPolygon:
+    """Re-project an EPSG:2230 polygon back to WGS-84 (lat/lng)."""
+    if isinstance(polygon, MultiPolygon):
+        return MultiPolygon([project_to_wgs84(p) for p in polygon.geoms])
+
+    projected_exterior = [
+        _TO_WGS84.transform(x, y) for x, y in polygon.exterior.coords
+    ]
+    projected_interiors = [
+        [_TO_WGS84.transform(x, y) for x, y in ring.coords]
+        for ring in polygon.interiors
+    ]
+    return Polygon(projected_exterior, projected_interiors)
 
 
 def calculate_area_sqft(polygon_wgs84: Polygon) -> float:
@@ -39,41 +66,58 @@ def calculate_area_sqft(polygon_wgs84: Polygon) -> float:
     return projected.area
 
 
-def check_setback(
+def compute_buildable_zone(
     property_wgs84: Polygon,
-    adu_wgs84: Polygon,
     setback_ft: float,
-) -> tuple[bool, str]:
+    obstacle_polygons_ft: list[Polygon],
+) -> Polygon | MultiPolygon | None:
     """
-    Check that *adu_wgs84* lies fully within the property boundary
-    after applying an internal buffer of *setback_ft*.
+    Compute the legal buildable zone within a property.
 
-    Returns (passes, message).
+    1. Project property to feet.
+    2. Apply inward setback buffer.
+    3. Subtract all obstacle polygons.
+    4. Project result back to WGS-84 for frontend rendering.
+
+    Returns the buildable zone in WGS-84, or None if no area remains.
     """
+    # Step 1: Project to feet
     prop_ft = project_to_feet(property_wgs84)
-    adu_ft = project_to_feet(adu_wgs84)
+
+    # Step 2: Apply setback (shrink inward)
+    safe_zone = prop_ft.buffer(-setback_ft)
+    if safe_zone.is_empty:
+        return None
+
+    # Step 3: Subtract obstacles
+    for obstacle in obstacle_polygons_ft:
+        safe_zone = safe_zone.difference(obstacle)
+        if safe_zone.is_empty:
+            return None
+
+    # Ensure valid geometry
+    if not safe_zone.is_valid:
+        safe_zone = safe_zone.buffer(0)
+
+    # Step 4: Project back to WGS-84
+    return project_to_wgs84(safe_zone)
+
+
+def get_buildable_area_sqft(
+    property_wgs84: Polygon,
+    setback_ft: float,
+    obstacle_polygons_ft: list[Polygon],
+) -> float:
+    """Calculate the area of the buildable zone in square feet."""
+    prop_ft = project_to_feet(property_wgs84)
 
     safe_zone = prop_ft.buffer(-setback_ft)
     if safe_zone.is_empty:
-        return False, (
-            f"Property is too small for a {setback_ft}-ft setback; "
-            "no buildable area remains."
-        )
-
-    if safe_zone.contains(adu_ft):
-        return True, "ADU is within the required setback zone."
-
-    return False, (
-        f"ADU violates the {setback_ft}-ft setback from the property line."
-    )
-
-
-def calculate_overlap_pct(poly_a: Polygon, poly_b: Polygon) -> float:
-    """
-    Return the percentage of *poly_a*'s area that overlaps with *poly_b*.
-    Both polygons must already be in the same CRS (EPSG:2230).
-    """
-    if not poly_a.intersects(poly_b):
         return 0.0
-    intersection_area = poly_a.intersection(poly_b).area
-    return (intersection_area / poly_a.area) * 100.0 if poly_a.area > 0 else 0.0
+
+    for obstacle in obstacle_polygons_ft:
+        safe_zone = safe_zone.difference(obstacle)
+        if safe_zone.is_empty:
+            return 0.0
+
+    return safe_zone.area

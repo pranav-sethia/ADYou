@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * MapInterface — Full-screen Mapbox satellite view with two-phase drawing
- * workflow: (1) draw property boundary, (2) draw ADU footprint.
- *
- * After both polygons are drawn, automatically sends them to the backend
- * for validation and renders visual feedback.
+ * MapInterface — Full-screen Mapbox satellite view with single-step
+ * property drawing. After the user traces their property boundary,
+ * the backend computes and returns the legal buildable zone, which is
+ * rendered as a green overlay on the map.
  */
 
 import { useRef, useState, useCallback } from "react";
@@ -18,7 +17,6 @@ import ValidationHUD from "./ValidationHUD";
 import AddressSearch from "./AddressSearch";
 
 import type {
-    DrawingPhase,
     GeoJSONGeometry,
     ValidationRequest,
     ValidationResponse,
@@ -43,21 +41,16 @@ export default function MapInterface() {
     const mapRef = useRef<MapRef | null>(null);
     const drawRef = useRef<MapboxDraw | null>(null);
 
-    // Drawing workflow state
-    const [phase, setPhase] = useState<DrawingPhase>("idle");
-    const [propertyGeometry, setPropertyGeometry] =
-        useState<GeoJSONGeometry | null>(null);
-    const [propertyFeatureId, setPropertyFeatureId] = useState<string | null>(
-        null,
-    );
+    // Simple state: have we drawn something?
+    const [hasDrawn, setHasDrawn] = useState(false);
 
     // Validation state
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<ValidationResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Result color overlay GeoJSON
-    const [resultOverlay, setResultOverlay] = useState<GeoJSON.Feature | null>(
+    // Buildable zone overlay (returned from backend)
+    const [buildableZone, setBuildableZone] = useState<GeoJSON.Feature | null>(
         null,
     );
 
@@ -66,23 +59,16 @@ export default function MapInterface() {
     /* ---------------------------------------------------------------- */
 
     const handleDrawProperty = useCallback(() => {
-        setPhase("property");
-        drawRef.current?.changeMode("draw_polygon");
-    }, []);
-
-    const handleDrawADU = useCallback(() => {
-        setPhase("adu");
+        setHasDrawn(false);
         drawRef.current?.changeMode("draw_polygon");
     }, []);
 
     const handleReset = useCallback(() => {
         drawRef.current?.deleteAll();
-        setPhase("idle");
-        setPropertyGeometry(null);
-        setPropertyFeatureId(null);
+        setHasDrawn(false);
         setResult(null);
         setError(null);
-        setResultOverlay(null);
+        setBuildableZone(null);
     }, []);
 
     /** Fly the map to a geocoded address */
@@ -97,60 +83,30 @@ export default function MapInterface() {
         [],
     );
 
-    /** Called whenever a polygon draw finishes */
+    /** Called when the user finishes drawing. No phase-dependence needed. */
     const handleDrawCreate = useCallback(
         async (evt: { features: GeoJSON.Feature[] }) => {
             const feature = evt.features[0];
             if (!feature || feature.geometry.type !== "Polygon") return;
 
             const geometry = feature.geometry as GeoJSONGeometry;
+            setHasDrawn(true);
 
-            if (phase === "property") {
-                // Tag the property feature for styling
-                if (drawRef.current && feature.id) {
-                    drawRef.current.setFeatureProperty(
-                        feature.id as string,
-                        "type",
-                        "property",
-                    );
-                }
-
-                setPropertyGeometry(geometry);
-                setPropertyFeatureId(feature.id as string);
-                setPhase("adu");
-                return;
-            }
-
-            if (phase === "adu" && propertyGeometry) {
-                // Tag ADU feature for styling
-                if (drawRef.current && feature.id) {
-                    drawRef.current.setFeatureProperty(
-                        feature.id as string,
-                        "type",
-                        "adu",
-                    );
-                }
-
-                // Validate
-                await validatePlacement(propertyGeometry, geometry, feature);
-            }
+            // Send to backend for buildable zone computation
+            await computeBuildableZone(geometry);
         },
-        [phase, propertyGeometry],
+        [],
     );
 
-    /** Send both polygons to the backend */
-    const validatePlacement = async (
-        property: GeoJSONGeometry,
-        adu: GeoJSONGeometry,
-        aduFeature: GeoJSON.Feature,
-    ) => {
+    /** Send property polygon to the backend */
+    const computeBuildableZone = async (propertyGeometry: GeoJSONGeometry) => {
         setIsLoading(true);
         setError(null);
         setResult(null);
+        setBuildableZone(null);
 
         const payload: ValidationRequest = {
-            property_boundary: property,
-            adu_box: adu,
+            property_boundary: propertyGeometry,
             location: "irvine_ca",
         };
 
@@ -163,22 +119,20 @@ export default function MapInterface() {
 
             if (!res.ok) {
                 const detail = await res.json().catch(() => null);
-                throw new Error(
-                    detail?.detail ?? `Server error (${res.status})`,
-                );
+                throw new Error(detail?.detail ?? `Server error (${res.status})`);
             }
 
             const data: ValidationResponse = await res.json();
             setResult(data);
 
-            // Create result overlay for color feedback
-            setResultOverlay({
-                type: "Feature",
-                properties: {
-                    valid: data.is_valid,
-                },
-                geometry: adu,
-            });
+            // Render the buildable zone if the backend returned one
+            if (data.buildable_zone_geojson) {
+                setBuildableZone({
+                    type: "Feature",
+                    properties: { valid: data.is_valid },
+                    geometry: data.buildable_zone_geojson as unknown as GeoJSON.Geometry,
+                });
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Network error");
         } finally {
@@ -201,7 +155,8 @@ export default function MapInterface() {
                     pitch: 0,
                     bearing: 0,
                 }}
-                mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
+                maxZoom={22}
+                mapStyle="mapbox://styles/mapbox/satellite-v9"
                 style={{ width: "100%", height: "100%" }}
                 attributionControl={false}
             >
@@ -219,40 +174,30 @@ export default function MapInterface() {
                     onUpdate={handleDrawCreate}
                 />
 
-                {/* Result color overlay */}
-                {resultOverlay && (
+                {/* Buildable Zone Overlay (returned from backend) */}
+                {buildableZone && (
                     <Source
-                        id="result-overlay"
+                        id="buildable-zone"
                         type="geojson"
                         data={{
                             type: "FeatureCollection",
-                            features: [resultOverlay],
+                            features: [buildableZone],
                         }}
                     >
                         <Layer
-                            id="result-fill"
+                            id="buildable-fill"
                             type="fill"
                             paint={{
-                                "fill-color": [
-                                    "case",
-                                    ["==", ["get", "valid"], true],
-                                    "#22c55e",
-                                    "#ef4444",
-                                ],
-                                "fill-opacity": 0.35,
+                                "fill-color": "#22c55e",
+                                "fill-opacity": 0.3,
                             }}
                         />
                         <Layer
-                            id="result-outline"
+                            id="buildable-outline"
                             type="line"
                             paint={{
-                                "line-color": [
-                                    "case",
-                                    ["==", ["get", "valid"], true],
-                                    "#22c55e",
-                                    "#ef4444",
-                                ],
-                                "line-width": 3,
+                                "line-color": "#22c55e",
+                                "line-width": 2.5,
                             }}
                         />
                     </Source>
@@ -261,12 +206,11 @@ export default function MapInterface() {
 
             {/* HUD Overlay */}
             <ValidationHUD
-                phase={phase}
+                hasDrawn={hasDrawn}
                 isLoading={isLoading}
                 result={result}
                 error={error}
                 onDrawProperty={handleDrawProperty}
-                onDrawADU={handleDrawADU}
                 onReset={handleReset}
             />
 

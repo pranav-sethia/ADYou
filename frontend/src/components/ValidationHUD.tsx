@@ -2,23 +2,22 @@
 
 /**
  * ValidationHUD — Heads-up display overlay showing the drawing workflow
- * steps and validation results (toast notifications).
+ * and validation results (toast notifications).
  */
 
 import { useEffect, useState } from "react";
-import type { DrawingPhase, ValidationResponse } from "@/types";
+import type { ValidationResponse } from "@/types";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                             */
 /* ------------------------------------------------------------------ */
 
 interface ValidationHUDProps {
-    phase: DrawingPhase;
+    hasDrawn: boolean;
     isLoading: boolean;
     result: ValidationResponse | null;
     error: string | null;
     onDrawProperty: () => void;
-    onDrawADU: () => void;
     onReset: () => void;
 }
 
@@ -27,12 +26,11 @@ interface ValidationHUDProps {
 /* ------------------------------------------------------------------ */
 
 export default function ValidationHUD({
-    phase,
+    hasDrawn,
     isLoading,
     result,
     error,
     onDrawProperty,
-    onDrawADU,
     onReset,
 }: ValidationHUDProps) {
     const [toastVisible, setToastVisible] = useState(false);
@@ -62,52 +60,40 @@ export default function ValidationHUD({
                     Feasibility Engine
                 </h2>
 
-                {/* Step 1 */}
+                {/* Step indicator */}
                 <StepRow
                     number={1}
                     label="Draw Property Boundary"
                     description="Trace the outline of your lot"
-                    isActive={phase === "idle" || phase === "property"}
-                    isComplete={phase === "adu" || !!result}
+                    isActive={!hasDrawn && !result}
+                    isComplete={hasDrawn || !!result}
                 />
 
-                {/* Step 2 */}
                 <StepRow
                     number={2}
-                    label="Draw ADU Footprint"
-                    description="Place your accessory dwelling"
-                    isActive={phase === "adu"}
+                    label="View Buildable Area"
+                    description="See where you can build an ADU"
+                    isActive={isLoading}
                     isComplete={!!result}
                 />
 
                 {/* Action Buttons */}
                 <div className="mt-5 flex flex-col gap-2">
-                    {phase === "idle" && !result && (
+                    {!hasDrawn && !result && !isLoading && (
                         <button
                             onClick={onDrawProperty}
                             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 
                          text-white text-sm font-medium transition-all duration-200 
                          hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
                         >
-                            ✏️ Draw Property
+                            ✏️ Draw Property Boundary
                         </button>
                     )}
 
-                    {phase === "property" && (
-                        <p className="text-xs text-indigo-300 text-center animate-pulse">
-                            Click on the map to trace your property boundary…
+                    {!hasDrawn && !result && !isLoading && (
+                        <p className="text-xs text-zinc-500 text-center">
+                            Click the button, then trace your lot on the map
                         </p>
-                    )}
-
-                    {phase === "adu" && !result && (
-                        <button
-                            onClick={onDrawADU}
-                            className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 
-                         text-white text-sm font-medium transition-all duration-200 
-                         hover:shadow-lg hover:shadow-cyan-500/25 cursor-pointer"
-                        >
-                            📐 Draw ADU
-                        </button>
                     )}
 
                     {(result || error) && (
@@ -125,7 +111,7 @@ export default function ValidationHUD({
                 {isLoading && (
                     <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
                         <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                        Validating placement…
+                        Computing buildable zone…
                     </div>
                 )}
             </div>
@@ -158,15 +144,38 @@ export default function ValidationHUD({
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-emerald-400 text-lg">✅</span>
                                 <h3 className="text-sm font-semibold text-emerald-400">
-                                    Valid Placement!
+                                    ADU Eligible!
                                 </h3>
                             </div>
-                            <p className="text-xs text-zinc-300 mb-1">
-                                Area: {result.area_sqft.toLocaleString()} sq ft
-                            </p>
-                            {result.est_cost && (
+                            <div className="space-y-1.5 mb-3">
+                                <p className="text-xs text-zinc-300">
+                                    Property: {result.property_area_sqft.toLocaleString()} sq ft
+                                </p>
+                                <p className="text-xs text-zinc-300">
+                                    Buildable: <span className="text-emerald-400 font-semibold">
+                                        {result.buildable_area_sqft.toLocaleString()} sq ft
+                                    </span>
+                                </p>
+                                <p className="text-xs text-zinc-300">
+                                    Setback applied: {result.setback_ft} ft
+                                </p>
+                                <p className="text-xs text-zinc-300">
+                                    Max ADU: {result.max_adu_sqft.toLocaleString()} sq ft
+                                </p>
+                            </div>
+                            {result.obstacles.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-xs text-zinc-400 mb-1">Obstacles subtracted:</p>
+                                    {result.obstacles.map((obs, i) => (
+                                        <p key={i} className="text-xs text-zinc-500">
+                                            • {obs.name} ({obs.area_sqft.toLocaleString()} sq ft)
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                            {result.est_cost_low && result.est_cost_high && (
                                 <p className="text-lg font-bold text-emerald-400">
-                                    Est. Cost: ${result.est_cost.toLocaleString()}
+                                    ${result.est_cost_low.toLocaleString()} – ${result.est_cost_high.toLocaleString()}
                                 </p>
                             )}
                         </div>
@@ -177,20 +186,16 @@ export default function ValidationHUD({
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-red-400 text-lg">❌</span>
                                 <h3 className="text-sm font-semibold text-red-400">
-                                    Invalid Placement
+                                    Insufficient Space
                                 </h3>
                             </div>
-                            <p className="text-xs text-zinc-300 mb-2">
-                                Area: {result.area_sqft.toLocaleString()} sq ft
+                            <p className="text-xs text-zinc-300 mb-2">{result.message}</p>
+                            <p className="text-xs text-zinc-300">
+                                Property: {result.property_area_sqft.toLocaleString()} sq ft
                             </p>
-                            <ul className="space-y-1">
-                                {result.violations.map((v, i) => (
-                                    <li key={i} className="text-xs text-red-300 flex gap-1.5">
-                                        <span className="shrink-0">•</span>
-                                        <span>{v}</span>
-                                    </li>
-                                ))}
-                            </ul>
+                            <p className="text-xs text-zinc-300">
+                                Remaining: {result.buildable_area_sqft.toLocaleString()} sq ft
+                            </p>
                         </div>
                     )}
                 </div>

@@ -9,9 +9,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from shapely.geometry import Polygon
-from shapely.affinity import translate
-
-from api.engine.geometry import project_to_feet, calculate_overlap_pct
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +57,7 @@ class MockObstacleDetector(ObstacleDetector):
     without a real CV model.
 
     Obstacles are:
+    • A **Primary Residence** – 40×30 ft rectangle centered on the lot.
     • A **Swimming Pool** – 20×10 ft rectangle offset to the south-east.
     • A **Large Oak Tree** – ~8 ft diameter circle offset to the north-west.
     """
@@ -70,17 +68,25 @@ class MockObstacleDetector(ObstacleDetector):
     ) -> list[DetectedObstacle]:
         cx, cy = property_polygon_ft.centroid.coords[0]
 
-        # Pool: 20 ft × 10 ft, offset +15 ft east, −20 ft south from centroid
-        pool = Polygon([
-            (cx + 5, cy - 25),
-            (cx + 25, cy - 25),
-            (cx + 25, cy - 15),
-            (cx + 5, cy - 15),
+        # Primary Residence: 40 ft × 30 ft, centered on the lot
+        house = Polygon([
+            (cx - 20, cy - 15),
+            (cx + 20, cy - 15),
+            (cx + 20, cy + 15),
+            (cx - 20, cy + 15),
         ])
 
-        # Tree canopy: approximate 8-ft diameter circle at −12 ft west, +15 ft north
-        tree_center_x = cx - 12
-        tree_center_y = cy + 15
+        # Pool: 20 ft × 10 ft, offset +25 ft east, −25 ft south from centroid
+        pool = Polygon([
+            (cx + 15, cy - 30),
+            (cx + 35, cy - 30),
+            (cx + 35, cy - 20),
+            (cx + 15, cy - 20),
+        ])
+
+        # Tree canopy: approximate 8-ft diameter circle at −20 ft west, +20 ft north
+        tree_center_x = cx - 20
+        tree_center_y = cy + 20
         tree = Polygon([
             (tree_center_x - 4, tree_center_y),
             (tree_center_x - 2.8, tree_center_y - 2.8),
@@ -93,6 +99,7 @@ class MockObstacleDetector(ObstacleDetector):
         ])
 
         return [
+            DetectedObstacle(name="Primary Residence", polygon_ft=house),
             DetectedObstacle(name="Swimming Pool", polygon_ft=pool),
             DetectedObstacle(name="Large Oak Tree", polygon_ft=tree),
         ]
@@ -102,11 +109,6 @@ class MockObstacleDetector(ObstacleDetector):
 # Future: Real YOLOv8 detector stub
 # ---------------------------------------------------------------------------
 # class YoloObstacleDetector(ObstacleDetector):
-#     """
-#     Runs Ultralytics YOLOv8 on a satellite tile and converts the
-#     bounding boxes to Shapely polygons in EPSG:2230.
-#     """
-#
 #     def __init__(self, model_path: str = "yolov8n.pt"):
 #         from ultralytics import YOLO
 #         self.model = YOLO(model_path)
@@ -117,20 +119,3 @@ class MockObstacleDetector(ObstacleDetector):
 #         # 3. Convert pixel bboxes → geo coords → EPSG:2230 polygons.
 #         # 4. Return [DetectedObstacle(name=cls, polygon_ft=poly), ...]
 #         raise NotImplementedError
-
-
-def check_obstacles(
-    adu_polygon_ft: Polygon,
-    obstacles: list[DetectedObstacle],
-    overlap_threshold_pct: float = 10.0,
-) -> list[dict]:
-    """
-    Return details for every obstacle whose overlap with the ADU exceeds
-    *overlap_threshold_pct*.
-    """
-    conflicts: list[dict] = []
-    for obs in obstacles:
-        pct = calculate_overlap_pct(adu_polygon_ft, obs.polygon_ft)
-        if pct >= overlap_threshold_pct:
-            conflicts.append({"name": obs.name, "overlap_pct": round(pct, 1)})
-    return conflicts
