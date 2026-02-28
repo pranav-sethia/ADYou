@@ -1,26 +1,20 @@
 "use client";
 
 /**
- * MapInterface — Full-screen Mapbox satellite view with single-step
- * property drawing. After the user traces their property boundary,
- * the backend computes and returns the legal buildable zone, which is
- * rendered as a green overlay on the map.
+ * MapInterface — Full-screen Mapbox satellite view with automated
+ * ADU feasibility analysis. User searches an address, clicks "Analyze",
+ * and the backend returns property boundary, obstacles, and buildable zone.
  */
 
 import { useRef, useState, useCallback } from "react";
 import Map, { Source, Layer, NavigationControl } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
-import MapboxDraw from "@mapbox/mapbox-gl-draw";
 
-import DrawControl from "./DrawControls";
 import ValidationHUD from "./ValidationHUD";
 import AddressSearch from "./AddressSearch";
+import DrawControls from "./DrawControls";
 
-import type {
-    GeoJSONGeometry,
-    ValidationRequest,
-    ValidationResponse,
-} from "@/types";
+import type { AnalyzeRequest, AnalyzeResponse } from "@/types";
 
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -39,79 +33,105 @@ const IRVINE_CENTER = { longitude: -117.7731, latitude: 33.6846 };
 
 export default function MapInterface() {
     const mapRef = useRef<MapRef | null>(null);
-    const drawRef = useRef<MapboxDraw | null>(null);
 
-    // Simple state: have we drawn something?
-    const [hasDrawn, setHasDrawn] = useState(false);
+    // Location state (set by address search)
+    const [selectedLocation, setSelectedLocation] = useState<{
+        lat: number;
+        lng: number;
+        name: string;
+    } | null>(null);
 
-    // Validation state
+    // Drawing state
+    const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Feature<GeoJSON.Polygon> | null>(null);
+
+    // Analysis state
     const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<ValidationResponse | null>(null);
+    const [result, setResult] = useState<AnalyzeResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Buildable zone overlay (returned from backend)
-    const [buildableZone, setBuildableZone] = useState<GeoJSON.Feature | null>(
-        null,
-    );
+    // GeoJSON layers (derived from result)
+    const propertyLayer = result?.property_geojson
+        ? {
+            type: "Feature" as const,
+            properties: {},
+            geometry: result.property_geojson as unknown as GeoJSON.Geometry,
+        }
+        : null;
+
+    const buildableLayer = result?.buildable_zone_geojson
+        ? {
+            type: "Feature" as const,
+            properties: {},
+            geometry: result.buildable_zone_geojson as unknown as GeoJSON.Geometry,
+        }
+        : null;
+
+    const obstacleFeatures = (result?.obstacles ?? [])
+        .map((obs, i) => ({
+            type: "Feature" as const,
+            properties: { name: obs.name, index: i },
+            geometry: obs.geojson as unknown as GeoJSON.Geometry,
+        }));
 
     /* ---------------------------------------------------------------- */
     /*  Handlers                                                        */
     /* ---------------------------------------------------------------- */
 
-    const handleDrawProperty = useCallback(() => {
-        setHasDrawn(false);
-        drawRef.current?.changeMode("draw_polygon");
-    }, []);
-
-    const handleReset = useCallback(() => {
-        drawRef.current?.deleteAll();
-        setHasDrawn(false);
-        setResult(null);
-        setError(null);
-        setBuildableZone(null);
-    }, []);
-
-    /** Fly the map to a geocoded address */
+    /** Called when user selects an address from search */
     const handleAddressResult = useCallback(
-        (lng: number, lat: number, _placeName: string) => {
+        (lng: number, lat: number, placeName: string) => {
+            setSelectedLocation({ lat, lng, name: placeName });
+            setDrawnPolygon(null);
+            setResult(null);
+            setError(null);
             mapRef.current?.flyTo({
                 center: [lng, lat],
-                zoom: 19,
+                zoom: 18,
                 duration: 2000,
             });
         },
         [],
     );
 
-    /** Called when the user finishes drawing. No phase-dependence needed. */
-    const handleDrawCreate = useCallback(
-        async (evt: { features: GeoJSON.Feature[] }) => {
-            const feature = evt.features[0];
-            if (!feature || feature.geometry.type !== "Polygon") return;
+    const onDrawUpdate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        console.log("Draw Event fired:", e);
+        // We only allow polygons. Grab the first one drawn.
+        const feature = e.features.find((f) => f.geometry.type === "Polygon") as GeoJSON.Feature<GeoJSON.Polygon> | undefined;
+        console.log("Extracted Polygon Feature:", feature);
+        setDrawnPolygon(feature || null);
+        setResult(null); // Clear previous results when drawing
+    }, []);
 
-            const geometry = feature.geometry as GeoJSONGeometry;
-            setHasDrawn(true);
+    const onDrawDelete = useCallback(() => {
+        setDrawnPolygon(null);
+        setResult(null);
+    }, []);
 
-            // Send to backend for buildable zone computation
-            await computeBuildableZone(geometry);
-        },
-        [],
-    );
+    /** Trigger the full analysis */
+    const handleAnalyze = useCallback(async () => {
+        console.log("Analyze clicked!");
+        console.log("Location:", selectedLocation);
+        console.log("Boundary:", drawnPolygon);
 
-    /** Send property polygon to the backend */
-    const computeBuildableZone = async (propertyGeometry: GeoJSONGeometry) => {
+        if (!selectedLocation || !drawnPolygon) {
+            console.warn("Missing required state to run analysis", {
+                hasLocation: !!selectedLocation,
+                hasPolygon: !!drawnPolygon
+            });
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setResult(null);
-        setBuildableZone(null);
 
-        const payload: ValidationRequest = {
-            property_boundary: propertyGeometry,
+        const payload: AnalyzeRequest = {
+            user_drawn_geojson: drawnPolygon.geometry as any, // Cast to match GeoJSONGeometry interface
             location: "irvine_ca",
         };
 
         try {
-            const res = await fetch(`${API_URL}/validate-placement`, {
+            const res = await fetch(`${API_URL}/analyze`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -122,23 +142,42 @@ export default function MapInterface() {
                 throw new Error(detail?.detail ?? `Server error (${res.status})`);
             }
 
-            const data: ValidationResponse = await res.json();
+            const data: AnalyzeResponse = await res.json();
             setResult(data);
 
-            // Render the buildable zone if the backend returned one
-            if (data.buildable_zone_geojson) {
-                setBuildableZone({
-                    type: "Feature",
-                    properties: { valid: data.is_valid },
-                    geometry: data.buildable_zone_geojson as unknown as GeoJSON.Geometry,
-                });
+            // Fit map to the property boundary
+            if (data.property_geojson) {
+                const coords =
+                    data.property_geojson.type === "Polygon"
+                        ? (data.property_geojson.coordinates as number[][][])[0]
+                        : (data.property_geojson.coordinates as number[][][][])[0][0];
+
+                if (coords && coords.length > 0) {
+                    const lngs = coords.map((c) => c[0]);
+                    const lats = coords.map((c) => c[1]);
+                    mapRef.current?.fitBounds(
+                        [
+                            [Math.min(...lngs) - 0.0002, Math.min(...lats) - 0.0002],
+                            [Math.max(...lngs) + 0.0002, Math.max(...lats) + 0.0002],
+                        ],
+                        { duration: 1500 },
+                    );
+                }
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Network error");
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [selectedLocation, drawnPolygon]);
+
+    /** Reset everything */
+    const handleReset = useCallback(() => {
+        setSelectedLocation(null);
+        setDrawnPolygon(null);
+        setResult(null);
+        setError(null);
+    }, []);
 
     /* ---------------------------------------------------------------- */
     /*  Render                                                          */
@@ -151,7 +190,7 @@ export default function MapInterface() {
                 mapboxAccessToken={MAPBOX_TOKEN}
                 initialViewState={{
                     ...IRVINE_CENTER,
-                    zoom: 18,
+                    zoom: 15,
                     pitch: 0,
                     bearing: 0,
                 }}
@@ -162,26 +201,87 @@ export default function MapInterface() {
             >
                 <NavigationControl position="bottom-right" />
 
-                <DrawControl
-                    drawRef={drawRef}
+                {/* Drawing Tools */}
+                <DrawControls
                     position="top-right"
                     displayControlsDefault={false}
                     controls={{
-                        polygon: false,
+                        polygon: true,
                         trash: true,
                     }}
-                    onCreate={handleDrawCreate}
-                    onUpdate={handleDrawCreate}
+                    defaultMode="draw_polygon"
+                    onCreate={onDrawUpdate}
+                    onUpdate={onDrawUpdate}
+                    onDelete={onDrawDelete}
                 />
 
-                {/* Buildable Zone Overlay (returned from backend) */}
-                {buildableZone && (
+                {/* Property Boundary — dashed indigo outline */}
+                {propertyLayer && (
+                    <Source
+                        id="property-boundary"
+                        type="geojson"
+                        data={{
+                            type: "FeatureCollection",
+                            features: [propertyLayer],
+                        }}
+                    >
+                        <Layer
+                            id="property-fill"
+                            type="fill"
+                            paint={{
+                                "fill-color": "#6366f1",
+                                "fill-opacity": 0.08,
+                            }}
+                        />
+                        <Layer
+                            id="property-outline"
+                            type="line"
+                            paint={{
+                                "line-color": "#818cf8",
+                                "line-width": 2.5,
+                                "line-dasharray": [3, 2],
+                            }}
+                        />
+                    </Source>
+                )}
+
+                {/* Obstacles — semi-transparent red */}
+                {obstacleFeatures.length > 0 && (
+                    <Source
+                        id="obstacles"
+                        type="geojson"
+                        data={{
+                            type: "FeatureCollection",
+                            features: obstacleFeatures,
+                        }}
+                    >
+                        <Layer
+                            id="obstacles-fill"
+                            type="fill"
+                            paint={{
+                                "fill-color": "#ef4444",
+                                "fill-opacity": 0.35,
+                            }}
+                        />
+                        <Layer
+                            id="obstacles-outline"
+                            type="line"
+                            paint={{
+                                "line-color": "#ef4444",
+                                "line-width": 1.5,
+                            }}
+                        />
+                    </Source>
+                )}
+
+                {/* Buildable Zone — glowing green */}
+                {buildableLayer && (
                     <Source
                         id="buildable-zone"
                         type="geojson"
                         data={{
                             type: "FeatureCollection",
-                            features: [buildableZone],
+                            features: [buildableLayer],
                         }}
                     >
                         <Layer
@@ -206,11 +306,12 @@ export default function MapInterface() {
 
             {/* HUD Overlay */}
             <ValidationHUD
-                hasDrawn={hasDrawn}
+                selectedLocation={selectedLocation}
+                hasDrawnBoundary={!!drawnPolygon}
                 isLoading={isLoading}
                 result={result}
                 error={error}
-                onDrawProperty={handleDrawProperty}
+                onAnalyze={handleAnalyze}
                 onReset={handleReset}
             />
 

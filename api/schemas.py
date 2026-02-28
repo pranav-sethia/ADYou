@@ -1,5 +1,5 @@
 """
-Pydantic models defining the API request/response contract for /validate-placement.
+Pydantic models for the ADU Feasibility Engine API.
 """
 
 from pydantic import BaseModel, Field
@@ -11,62 +11,50 @@ class GeoJSONGeometry(BaseModel):
     type: str = "Polygon"
     coordinates: list = Field(
         ...,
-        description=(
-            "Nested array of coordinate rings. "
-            "Each coordinate is [longitude, latitude]."
-        ),
+        description="Nested array of coordinate rings.",
     )
 
 
-class ValidationRequest(BaseModel):
-    """Payload sent from the frontend after the property polygon is drawn."""
+class AnalyzeRequest(BaseModel):
+    """Payload for the /analyze endpoint."""
 
-    property_boundary: GeoJSONGeometry = Field(
-        ..., description="GeoJSON Polygon of the user's property boundary."
+    user_drawn_geojson: GeoJSONGeometry = Field(
+        ..., description="The polygon drawn by the user defining their property/build area."
     )
     location: str = Field(
         default="irvine_ca",
-        description="Location key used to look up zoning rules (e.g. 'irvine_ca').",
+        description="Location key for zoning rules (e.g. 'irvine_ca').",
     )
 
 
-class ObstacleDetail(BaseModel):
-    """Information about a single detected obstacle."""
+class DetectedObstacle(BaseModel):
+    """A single detected obstacle with renderable geometry."""
 
     name: str
-    area_sqft: float = Field(
-        ..., description="Area of the obstacle in square feet."
-    )
+    area_sqft: float
+    confidence: float
+    geojson: GeoJSONGeometry
 
 
-class ValidationResponse(BaseModel):
-    """Result returned to the frontend."""
+class AnalyzeResponse(BaseModel):
+    """Full analysis result returned to the frontend."""
 
     is_valid: bool
     message: str
-    property_area_sqft: float = Field(
-        ..., description="Total property area in square feet."
-    )
-    buildable_area_sqft: float = Field(
-        ..., description="Remaining buildable area after setbacks and obstacles."
-    )
-    setback_ft: float = Field(
-        ..., description="Setback applied in feet."
-    )
-    max_adu_sqft: float = Field(
-        ..., description="Maximum ADU size allowed by zoning."
-    )
-    est_cost_low: float | None = Field(
-        default=None, description="Low-end cost estimate in USD."
-    )
-    est_cost_high: float | None = Field(
-        default=None, description="High-end cost estimate in USD."
-    )
-    obstacles: list[ObstacleDetail] = Field(
-        default_factory=list,
-        description="Obstacles detected within the property.",
+    property_geojson: GeoJSONGeometry = Field(
+        ..., description="Parcel boundary polygon for rendering."
     )
     buildable_zone_geojson: GeoJSONGeometry | None = Field(
         default=None,
-        description="GeoJSON of the computed buildable zone for rendering on the map.",
+        description="Computed buildable zone polygon for rendering.",
     )
+    obstacles: list[DetectedObstacle] = Field(
+        default_factory=list,
+        description="Detected obstacles with renderable GeoJSON.",
+    )
+    property_area_sqft: float
+    buildable_area_sqft: float
+    setback_ft: float
+    max_adu_sqft: float
+    est_cost_low: float | None = None
+    est_cost_high: float | None = None

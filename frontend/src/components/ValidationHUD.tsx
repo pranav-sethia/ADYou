@@ -1,23 +1,24 @@
 "use client";
 
 /**
- * ValidationHUD — Heads-up display overlay showing the drawing workflow
- * and validation results (toast notifications).
+ * ValidationHUD — Heads-up display overlay showing the analysis workflow
+ * and results panel.
  */
 
 import { useEffect, useState } from "react";
-import type { ValidationResponse } from "@/types";
+import type { AnalyzeResponse } from "@/types";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                             */
 /* ------------------------------------------------------------------ */
 
 interface ValidationHUDProps {
-    hasDrawn: boolean;
+    selectedLocation: { lat: number; lng: number; name: string } | null;
+    hasDrawnBoundary: boolean;
     isLoading: boolean;
-    result: ValidationResponse | null;
+    result: AnalyzeResponse | null;
     error: string | null;
-    onDrawProperty: () => void;
+    onAnalyze: () => void;
     onReset: () => void;
 }
 
@@ -26,17 +27,17 @@ interface ValidationHUDProps {
 /* ------------------------------------------------------------------ */
 
 export default function ValidationHUD({
-    hasDrawn,
+    selectedLocation,
+    hasDrawnBoundary,
     isLoading,
     result,
     error,
-    onDrawProperty,
+    onAnalyze,
     onReset,
 }: ValidationHUDProps) {
     const [toastVisible, setToastVisible] = useState(false);
     const [toastExiting, setToastExiting] = useState(false);
 
-    // Show toast when we get a result or error
     useEffect(() => {
         if (result || error) {
             setToastVisible(true);
@@ -60,39 +61,53 @@ export default function ValidationHUD({
                     Feasibility Engine
                 </h2>
 
-                {/* Step indicator */}
                 <StepRow
                     number={1}
-                    label="Draw Property Boundary"
-                    description="Trace the outline of your lot"
-                    isActive={!hasDrawn && !result}
-                    isComplete={hasDrawn || !!result}
+                    label="Search Address"
+                    description="Find your property on the map"
+                    isActive={!selectedLocation}
+                    isComplete={!!selectedLocation}
                 />
 
                 <StepRow
                     number={2}
-                    label="View Buildable Area"
-                    description="See where you can build an ADU"
+                    label="Draw Analysis Boundary"
+                    description="Use the polygon tool (top right) to outline the build area"
+                    isActive={!!selectedLocation && !hasDrawnBoundary}
+                    isComplete={hasDrawnBoundary}
+                />
+
+                <StepRow
+                    number={3}
+                    label="AI Property Scan"
+                    description="Detect structures & compute buildable area"
                     isActive={isLoading}
                     isComplete={!!result}
                 />
 
                 {/* Action Buttons */}
                 <div className="mt-5 flex flex-col gap-2">
-                    {!hasDrawn && !result && !isLoading && (
-                        <button
-                            onClick={onDrawProperty}
-                            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 
-                         text-white text-sm font-medium transition-all duration-200 
-                         hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
-                        >
-                            ✏️ Draw Property Boundary
-                        </button>
+                    {selectedLocation && !result && !isLoading && (
+                        <>
+                            <p className="text-xs text-zinc-400 mb-1 truncate">
+                                📍 {selectedLocation.name}
+                            </p>
+                            <button
+                                onClick={onAnalyze}
+                                disabled={!hasDrawnBoundary}
+                                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 
+                                ${hasDrawnBoundary
+                                        ? "bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
+                                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"}`}
+                            >
+                                🔍 Analyze Area
+                            </button>
+                        </>
                     )}
 
-                    {!hasDrawn && !result && !isLoading && (
+                    {!selectedLocation && !result && (
                         <p className="text-xs text-zinc-500 text-center">
-                            Click the button, then trace your lot on the map
+                            Search for an address to get started
                         </p>
                     )}
 
@@ -107,11 +122,20 @@ export default function ValidationHUD({
                     )}
                 </div>
 
-                {/* Loading indicator */}
+                {/* Loading indicator with scanning animation */}
                 {isLoading && (
-                    <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
-                        <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                        Computing buildable zone…
+                    <div className="mt-4">
+                        <div className="flex items-center gap-2 text-xs text-zinc-400 mb-2">
+                            <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                            Scanning property…
+                        </div>
+                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-pulse"
+                                style={{ width: "60%", animation: "pulse 1.5s ease-in-out infinite" }} />
+                        </div>
+                        <p className="text-[10px] text-zinc-600 mt-1">
+                            Fetching parcel boundary → Detecting structures → Computing zones
+                        </p>
                     </div>
                 )}
             </div>
@@ -147,9 +171,12 @@ export default function ValidationHUD({
                                     ADU Eligible!
                                 </h3>
                             </div>
+                            {/* {result.address && (
+                                <p className="text-xs text-zinc-400 mb-2">📍 {result.address}</p>
+                            )} */}
                             <div className="space-y-1.5 mb-3">
                                 <p className="text-xs text-zinc-300">
-                                    Property: {result.property_area_sqft.toLocaleString()} sq ft
+                                    Property: <span className="font-semibold">{result.property_area_sqft.toLocaleString()} sq ft</span>
                                 </p>
                                 <p className="text-xs text-zinc-300">
                                     Buildable: <span className="text-emerald-400 font-semibold">
@@ -157,18 +184,15 @@ export default function ValidationHUD({
                                     </span>
                                 </p>
                                 <p className="text-xs text-zinc-300">
-                                    Setback applied: {result.setback_ft} ft
-                                </p>
-                                <p className="text-xs text-zinc-300">
-                                    Max ADU: {result.max_adu_sqft.toLocaleString()} sq ft
+                                    Setback: {result.setback_ft} ft · Max ADU: {result.max_adu_sqft.toLocaleString()} sq ft
                                 </p>
                             </div>
                             {result.obstacles.length > 0 && (
                                 <div className="mb-3">
-                                    <p className="text-xs text-zinc-400 mb-1">Obstacles subtracted:</p>
+                                    <p className="text-xs text-zinc-400 mb-1">Structures detected:</p>
                                     {result.obstacles.map((obs, i) => (
                                         <p key={i} className="text-xs text-zinc-500">
-                                            • {obs.name} ({obs.area_sqft.toLocaleString()} sq ft)
+                                            • {obs.name} ({obs.area_sqft.toLocaleString()} sq ft, {Math.round(obs.confidence * 100)}% conf)
                                         </p>
                                     ))}
                                 </div>
@@ -190,12 +214,9 @@ export default function ValidationHUD({
                                 </h3>
                             </div>
                             <p className="text-xs text-zinc-300 mb-2">{result.message}</p>
-                            <p className="text-xs text-zinc-300">
-                                Property: {result.property_area_sqft.toLocaleString()} sq ft
-                            </p>
-                            <p className="text-xs text-zinc-300">
-                                Remaining: {result.buildable_area_sqft.toLocaleString()} sq ft
-                            </p>
+                            {/* {result.address && (
+                                <p className="text-xs text-zinc-400">📍 {result.address}</p>
+                            )} */}
                         </div>
                     )}
                 </div>
@@ -237,10 +258,10 @@ function StepRow({
             <div>
                 <p
                     className={`text-sm font-medium transition-colors duration-300 ${isComplete
-                            ? "text-emerald-400"
-                            : isActive
-                                ? "text-white"
-                                : "text-zinc-500"
+                        ? "text-emerald-400"
+                        : isActive
+                            ? "text-white"
+                            : "text-zinc-500"
                         }`}
                 >
                     {label}

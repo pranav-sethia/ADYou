@@ -1,35 +1,35 @@
 /**
  * Shared TypeScript types for the ADU Feasibility Engine frontend.
+ * Mirrors the backend Pydantic models.
  */
-
-/* ------------------------------------------------------------------ */
-/*  API contract (mirrors backend Pydantic models)                    */
-/* ------------------------------------------------------------------ */
 
 export interface GeoJSONGeometry {
     type: "Polygon" | "MultiPolygon";
     coordinates: number[][][] | number[][][][];
 }
 
-export interface ValidationRequest {
-    property_boundary: GeoJSONGeometry;
+export interface AnalyzeRequest {
+    user_drawn_geojson: GeoJSONGeometry;
     location: string;
 }
 
-export interface ObstacleDetail {
+export interface DetectedObstacle {
     name: string;
     area_sqft: number;
+    confidence: number;
+    geojson: GeoJSONGeometry;
 }
 
-export interface ValidationResponse {
+export interface AnalyzeResponse {
     is_valid: boolean;
     message: string;
+    property_geojson: GeoJSONGeometry;
+    buildable_zone_geojson: GeoJSONGeometry | null;
+    obstacles: DetectedObstacle[];
     property_area_sqft: number;
     buildable_area_sqft: number;
     setback_ft: number;
     max_adu_sqft: number;
     est_cost_low: number | null;
     est_cost_high: number | null;
-    obstacles: ObstacleDetail[];
-    buildable_zone_geojson: GeoJSONGeometry | null;
 }
