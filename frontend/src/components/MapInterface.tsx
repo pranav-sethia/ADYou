@@ -113,9 +113,8 @@ export default function MapInterface() {
         console.log("Location:", selectedLocation);
         console.log("Boundary:", drawnPolygon);
 
-        if (!selectedLocation || !drawnPolygon) {
+        if (!drawnPolygon) {
             console.warn("Missing required state to run analysis", {
-                hasLocation: !!selectedLocation,
                 hasPolygon: !!drawnPolygon
             });
             return;

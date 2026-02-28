@@ -63,9 +63,9 @@ export default function ValidationHUD({
 
                 <StepRow
                     number={1}
-                    label="Search Address"
+                    label="(Optional) Search Address"
                     description="Find your property on the map"
-                    isActive={!selectedLocation}
+                    isActive={!selectedLocation && !hasDrawnBoundary}
                     isComplete={!!selectedLocation}
                 />
 
@@ -73,7 +73,7 @@ export default function ValidationHUD({
                     number={2}
                     label="Draw Analysis Boundary"
                     description="Use the polygon tool (top right) to outline the build area"
-                    isActive={!!selectedLocation && !hasDrawnBoundary}
+                    isActive={!hasDrawnBoundary}
                     isComplete={hasDrawnBoundary}
                 />
 
@@ -87,11 +87,13 @@ export default function ValidationHUD({
 
                 {/* Action Buttons */}
                 <div className="mt-5 flex flex-col gap-2">
-                    {selectedLocation && !result && !isLoading && (
+                    {!result && !isLoading && (
                         <>
-                            <p className="text-xs text-zinc-400 mb-1 truncate">
-                                📍 {selectedLocation.name}
-                            </p>
+                            {selectedLocation && (
+                                <p className="text-xs text-zinc-400 mb-1 truncate">
+                                    📍 {selectedLocation.name}
+                                </p>
+                            )}
                             <button
                                 onClick={onAnalyze}
                                 disabled={!hasDrawnBoundary}
@@ -105,9 +107,9 @@ export default function ValidationHUD({
                         </>
                     )}
 
-                    {!selectedLocation && !result && (
-                        <p className="text-xs text-zinc-500 text-center">
-                            Search for an address to get started
+                    {!hasDrawnBoundary && !result && (
+                        <p className="text-xs text-zinc-500 text-center mt-2">
+                            Search for an address or draw a boundary to get started
                         </p>
                     )}
 
