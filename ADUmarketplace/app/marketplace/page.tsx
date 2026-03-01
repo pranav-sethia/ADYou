@@ -11,12 +11,16 @@ import { defaultFilters, FilterState } from '@/lib/utils/filters'
 import { SlidersHorizontal, PlusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { AuthModal } from '@/components/auth/AuthModal'
 
 export default function MarketplacePage() {
     const [filters, setFilters] = useState<FilterState>(defaultFilters)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
     const { isLoggedIn } = useAuth()
+    const router = useRouter()
 
     const { listings, totalCount } = useListings(filters, searchQuery)
 
@@ -68,7 +72,16 @@ export default function MarketplacePage() {
                                     Filter
                                 </Button>
                             </div>
-                            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm px-5 py-2.5 h-auto text-sm transition-colors flex items-center gap-2 shrink-0">
+                            <Button
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm px-5 py-2.5 h-auto text-sm transition-colors flex items-center gap-2 shrink-0"
+                                onClick={() => {
+                                    if (isLoggedIn) {
+                                        router.push('/dashboard/listings/new')
+                                    } else {
+                                        setIsAuthModalOpen(true)
+                                    }
+                                }}
+                            >
                                 <PlusCircle className="w-5 h-5" strokeWidth={2.5} />
                                 Create Listing
                             </Button>
@@ -93,6 +106,11 @@ export default function MarketplacePage() {
 
                 </div>
             </div>
+
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+            />
             {/* Omitted Footer here to keep the height 100vh calculation correct for the app layout, but typically it exists */}
         </div>
     )

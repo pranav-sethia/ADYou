@@ -1,12 +1,14 @@
 "use client"
 import { GripVertical, MoreVertical, Sparkles, Send, Building2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export function CanvasEditor() {
+    const router = useRouter()
     return (
         <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
             {/* Toolbar */}
             <header className="h-16 border-b border-slate-200 flex items-center justify-between px-6 bg-white shrink-0">
-                <button className="text-slate-500 font-bold text-sm hover:text-slate-900 transition-colors">
+                <button onClick={() => router.push('/dashboard/listings')} className="text-slate-500 font-bold text-sm hover:text-slate-900 transition-colors cursor-pointer">
                     ← My Projects
                 </button>
                 <div className="flex items-center gap-3">

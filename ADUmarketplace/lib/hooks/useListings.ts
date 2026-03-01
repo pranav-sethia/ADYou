@@ -14,9 +14,8 @@ export function useListings(filters: FilterState = defaultFilters, searchQuery: 
     }
 
     const getListingsBySeller = (sellerId: string) => {
-        // For the hackathon demo, automatically assign the first 4 mock listings 
-        // to whatever user just logged in so they have an active dashboard to view.
-        return MOCK_LISTINGS.slice(0, 4)
+        // For the hackathon demo, automatically assign all mock listings to have the active dashboard feature them.
+        return MOCK_LISTINGS
     }
 
     return {

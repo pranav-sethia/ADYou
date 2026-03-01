@@ -54,9 +54,12 @@ from api.routers import rag
 from financial_chatbot.router import router as financial_router
 from api.routers.orchestrator import router as orchestrator_router
 
+from api.routers.report import router as report_router
+
 app.include_router(rag.router)
 app.include_router(financial_router)
 app.include_router(orchestrator_router)
+app.include_router(report_router)
 
 # Cost estimates
 _COST_PER_SQFT_LOW = 200.0

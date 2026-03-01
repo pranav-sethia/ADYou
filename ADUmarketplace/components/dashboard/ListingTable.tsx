@@ -1,15 +1,16 @@
 import { Listing } from '@/lib/types/listing'
 import { formatCurrency, formatDateString } from '@/lib/utils/formatting'
-import { Eye, Edit, Trash2, ExternalLink, MoreVertical, LayoutDashboard, Copy, PlayCircle, Heart, Home } from 'lucide-react'
+import { Eye, Edit, Trash2, ExternalLink, MoreVertical, LayoutDashboard, Copy, PlayCircle, Heart, Home, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
 
 interface ListingTableProps {
     listings: Listing[]
+    onDelete?: (id: string) => void
 }
 
-export function ListingTable({ listings }: ListingTableProps) {
+export function ListingTable({ listings, onDelete }: ListingTableProps) {
     if (listings.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center bg-surface-50 rounded-2xl border border-surface-200 border-dashed">
@@ -28,7 +29,7 @@ export function ListingTable({ listings }: ListingTableProps) {
     }
 
     return (
-        <div className="bg-surface-0 rounded-2xl border border-surface-200 overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+        <div className="bg-surface-0 rounded-2xl border border-surface-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-surface-50 border-b border-surface-200 text-xs uppercase font-bold text-surface-500 tracking-wider">
@@ -68,9 +69,11 @@ export function ListingTable({ listings }: ListingTableProps) {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${listing.status === 'published'
                                         ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                        : listing.status === 'draft'
-                                            ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                            : 'bg-surface-100 text-surface-600 border-surface-200'
+                                        : listing.status === 'report'
+                                            ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                            : listing.status === 'draft'
+                                                ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                                : 'bg-surface-100 text-surface-600 border-surface-200'
                                         }`}>
                                         {listing.status}
                                     </span>
@@ -83,7 +86,9 @@ export function ListingTable({ listings }: ListingTableProps) {
 
                                 {/* Rent Column */}
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="font-bold text-surface-900">{formatCurrency(listing.monthlyRent)}</div>
+                                    <div className="font-bold text-surface-900">
+                                        {listing.status === 'report' ? '—' : formatCurrency(listing.monthlyRent)}
+                                    </div>
                                 </td>
 
                                 {/* Performance Column */}
@@ -102,13 +107,22 @@ export function ListingTable({ listings }: ListingTableProps) {
 
                                 {/* Actions Column */}
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Button variant="outline" size="sm" asChild className="h-8 gap-1 border-surface-200 text-surface-700 hover:bg-surface-100 font-medium">
-                                            <Link href={`/editor/${listing.id}`}>
-                                                <Edit className="w-3.5 h-3.5" />
-                                                Edit
-                                            </Link>
-                                        </Button>
+                                    <div className="flex items-center justify-end gap-2">
+                                        {listing.status === 'report' ? (
+                                            <Button variant="outline" size="sm" asChild className="h-8 gap-1 border-blue-200 text-blue-700 hover:bg-blue-50 font-medium">
+                                                <Link href={`/report/${listing.id}`}>
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                    View Report
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <Button variant="outline" size="sm" asChild className="h-8 gap-1 border-surface-200 text-surface-700 hover:bg-surface-100 font-medium">
+                                                <Link href={`/editor/${listing.id}`}>
+                                                    <Edit className="w-3.5 h-3.5" />
+                                                    Edit
+                                                </Link>
+                                            </Button>
+                                        )}
                                         <div className="relative group/menu inline-block">
                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-surface-400 hover:text-surface-900">
                                                 <MoreVertical className="w-4 h-4" />
@@ -129,7 +143,14 @@ export function ListingTable({ listings }: ListingTableProps) {
                                                     </button>
                                                 )}
                                                 <div className="h-px bg-surface-200 my-1 mx-2" />
-                                                <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 font-medium">
+                                                <button
+                                                    onClick={() => {
+                                                        if (onDelete && confirm('Are you sure you want to delete this listing?')) {
+                                                            onDelete(listing.id)
+                                                        }
+                                                    }}
+                                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 font-medium cursor-pointer"
+                                                >
                                                     <Trash2 className="w-4 h-4 text-rose-500" /> Delete
                                                 </button>
                                             </div>

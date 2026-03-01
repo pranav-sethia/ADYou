@@ -24,14 +24,7 @@ export function ListingGrid({ listings }: ListingGridProps) {
 
     return (
         <div>
-            <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-surface-900">
-                    {listings.length} {listings.length === 1 ? 'ADU' : 'ADUs'} available
-                </h2>
-                <div className="text-sm font-medium text-surface-500">
-                    Sorted by: <span className="text-surface-900 font-semibold cursor-pointer border-b border-surface-300 border-dashed">Newest</span>
-                </div>
-            </div>
+            {/* Header removed as it is now handled by the parent page */}
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {listings.map((listing) => (

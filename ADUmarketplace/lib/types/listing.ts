@@ -2,7 +2,7 @@ export type AduType = 'detached' | 'attached' | 'garage_conversion' | 'junior_ad
 
 export type PermitStatus = 'verified' | 'unverified' | 'pending'
 
-export type ListingStatus = 'draft' | 'published' | 'archived'
+export type ListingStatus = 'draft' | 'published' | 'archived' | 'report'
 
 export interface Listing {
     id: string

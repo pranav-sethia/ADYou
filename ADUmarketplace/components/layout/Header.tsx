@@ -75,7 +75,7 @@ export function Header() {
                                     <Link href="/dashboard/saved">Saved Homes</Link>
                                 </Button>
                                 <Button asChild variant="ghost" className="text-surface-600 hover:text-surface-900 font-semibold hidden md:flex">
-                                    <Link href="/dashboard/listings">My Listings</Link>
+                                    <Link href="/dashboard/listings">My Projects</Link>
                                 </Button>
 
                                 <div className="h-8 w-px bg-surface-200 hidden md:block"></div>
