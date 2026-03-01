@@ -8,6 +8,7 @@ interface ChatInputProps {
   onChange: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
   isLoading: boolean;
+  placeholder?: string;
 }
 
 export function ChatInput({
@@ -15,6 +16,7 @@ export function ChatInput({
   onChange,
   onSubmit,
   isLoading,
+  placeholder,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,7 +57,7 @@ export function ChatInput({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about ADU regulations, requirements, permits..."
+              placeholder={placeholder ?? "Ask about ADU regulations, requirements, permits..."}
               rows={1}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 resize-none outline-none min-h-[24px] max-h-[120px] leading-relaxed"
               disabled={isLoading}

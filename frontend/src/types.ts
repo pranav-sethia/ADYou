@@ -3,6 +3,26 @@
  * Mirrors the backend Pydantic models.
  */
 
+export type AduType =
+  | "detached"
+  | "garage_conversion"
+  | "attached"
+  | "jadu"
+  | "unsure"
+  | null;
+
+export type PrimaryUse = "rental" | "family" | "str" | "personal" | null;
+
+export interface UserProfile {
+  aduType: AduType;
+  blockerTypes: string[];
+  hasBlockers: boolean | null;
+  hasExistingStructure: boolean | null;
+  primaryUse: PrimaryUse;
+  onboardingComplete: boolean;
+  onboardingStep: number;
+}
+
 export interface GeoJSONGeometry {
     type: "Polygon" | "MultiPolygon";
     coordinates: number[][][] | number[][][][];
