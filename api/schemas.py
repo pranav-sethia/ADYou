@@ -6,6 +6,23 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(description="User's email address")
+    password: str = Field(description="Plain text password")
+    role: str = Field(default="buyer", description="Role: 'buyer' or 'seller'")
+    name: str = Field(description="Full name of the user")
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserProfile(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    avatarUrl: str | None = None
+
 class GeoJSONGeometry(BaseModel):
     """A minimal GeoJSON Geometry (Polygon or MultiPolygon)."""
 

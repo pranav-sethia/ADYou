@@ -12,9 +12,6 @@ export default function BuyerSavedPage() {
     const { isBuyer } = useAuth()
     const { savedListings } = useSaved()
 
-    if (!isBuyer) {
-        return notFound()
-    }
 
     // Map saved IDs to actual full listing objects
     const savedListingsData = savedListings

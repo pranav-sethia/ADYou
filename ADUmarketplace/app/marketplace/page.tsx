@@ -1,5 +1,6 @@
 "use client"
 import { useState } from 'react'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { ListingGrid } from '@/components/marketplace/ListingGrid'
@@ -9,11 +10,13 @@ import { useListings } from '@/lib/hooks/useListings'
 import { defaultFilters, FilterState } from '@/lib/utils/filters'
 import { SlidersHorizontal, PlusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
 export default function MarketplacePage() {
     const [filters, setFilters] = useState<FilterState>(defaultFilters)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+    const { isLoggedIn } = useAuth()
 
     const { listings, totalCount } = useListings(filters, searchQuery)
 
@@ -25,27 +28,14 @@ export default function MarketplacePage() {
         <div className="min-h-screen flex flex-col bg-slate-50">
             <Header />
 
-            <div className="flex-1 flex flex-col pt-16">
-                {/* Banner */}
-                <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-3 flex justify-between items-center text-sm">
-                    <span className="text-emerald-800 font-medium">🏠 Ready to list your ADU? Check if your property qualifies.</span>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm px-4 py-2 h-auto text-sm transition-colors flex items-center gap-2">
-                        <PlusCircle className="w-5 h-5" strokeWidth={2.5} />
-                        Create Listing
-                    </Button>
-                </div>
+            <div className="flex-1 flex flex-col pt-8">
+                <div className="max-w-[1600px] w-full mx-auto flex flex-1 h-[calc(100vh-32px)]">
 
-                <div className="max-w-[1600px] w-full mx-auto flex flex-1 h-[calc(100vh-104px)]">
-
-                    {/* Desktop Filters Sidebar */}
-                    <aside className="w-[320px] bg-white border-r border-slate-200 overflow-y-auto custom-scrollbar hidden lg:block p-6 shrink-0">
-                        <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-lg font-bold text-slate-900">Filters</h2>
-                            <button className="text-sm text-slate-400 hover:text-slate-700" onClick={() => setFilters(defaultFilters)}>
-                                Clear all
-                            </button>
+                    {/* Desktop Navigation Sidebar */}
+                    <aside className="w-[320px] bg-white border-r border-slate-200 overflow-y-auto custom-scrollbar hidden lg:block p-8 shrink-0">
+                        <div className="pt-2">
+                            <FilterPanel filters={filters} onFilterChange={handleFilterChange} />
                         </div>
-                        <FilterPanel filters={filters} onFilterChange={handleFilterChange} />
                     </aside>
 
                     {/* Mobile Filters Drawer */}
@@ -66,15 +56,21 @@ export default function MarketplacePage() {
 
                     {/* Content Area */}
                     <main className="flex-1 overflow-y-auto p-6 md:p-8 flex flex-col">
-                        <div className="max-w-xl mb-6 flex items-center gap-2">
-                            <SearchBar onSearch={setSearchQuery} />
-                            <Button
-                                variant="outline"
-                                className="lg:hidden shrink-0 border-slate-200 text-slate-700 hover:bg-slate-50"
-                                onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
-                            >
-                                <SlidersHorizontal className="w-4 h-4 mr-2" />
-                                Filters
+                        <div className="w-full mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div className="max-w-xl w-full flex items-center gap-2">
+                                <SearchBar onSearch={setSearchQuery} />
+                                <Button
+                                    variant="outline"
+                                    className="lg:hidden shrink-0 border-slate-200 text-slate-700 hover:bg-slate-50"
+                                    onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+                                >
+                                    <SlidersHorizontal className="w-4 h-4 mr-2" />
+                                    Filter
+                                </Button>
+                            </div>
+                            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm px-5 py-2.5 h-auto text-sm transition-colors flex items-center gap-2 shrink-0">
+                                <PlusCircle className="w-5 h-5" strokeWidth={2.5} />
+                                Create Listing
                             </Button>
                         </div>
 

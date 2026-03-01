@@ -26,6 +26,7 @@ from engine.geometry import (
     compute_buildable_zone,
     get_buildable_area_sqft,
 )
+from api.auth import router as auth_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 # Cost estimates
 _COST_PER_SQFT_LOW = 200.0

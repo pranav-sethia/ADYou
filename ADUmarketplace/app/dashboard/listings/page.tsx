@@ -13,7 +13,7 @@ export default function SellerListingsPage() {
     const { isSeller, user } = useAuth()
     const { getListingsBySeller } = useListings()
 
-    if (!isSeller || !user) {
+    if (!user) {
         return notFound()
     }
 

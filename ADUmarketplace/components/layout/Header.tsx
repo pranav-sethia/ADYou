@@ -18,7 +18,7 @@ const LogoMark = () => (
 import { useState } from 'react'
 
 export function Header() {
-    const { authState, setAuthState } = useAuth()
+    const { user, isLoggedIn, logout } = useAuth()
     const pathname = usePathname()
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
@@ -60,7 +60,7 @@ export function Header() {
 
                     {/* Right Nav / Auth Controls */}
                     <div className="flex items-center gap-3">
-                        {authState === 'logged_out' ? (
+                        {!isLoggedIn ? (
                             <>
                                 <Button variant="ghost" className="hidden md:flex text-surface-600 hover:text-surface-900 font-semibold rounded-lg px-4" onClick={() => setIsAuthModalOpen(true)}>
                                     Sign In
@@ -71,28 +71,32 @@ export function Header() {
                             </>
                         ) : (
                             <div className="flex items-center gap-4">
-                                {authState === 'buyer' ? (
-                                    <Button asChild variant="ghost" className="text-surface-600 hover:text-surface-900 font-semibold hidden md:flex">
-                                        <Link href="/dashboard/saved">Saved Homes</Link>
-                                    </Button>
-                                ) : (
-                                    <Button asChild variant="ghost" className="text-surface-600 hover:text-surface-900 font-semibold hidden md:flex">
-                                        <Link href="/dashboard/listings">My Listings</Link>
-                                    </Button>
-                                )}
+                                <Button asChild variant="ghost" className="text-surface-600 hover:text-surface-900 font-semibold hidden md:flex">
+                                    <Link href="/dashboard/saved">Saved Homes</Link>
+                                </Button>
+                                <Button asChild variant="ghost" className="text-surface-600 hover:text-surface-900 font-semibold hidden md:flex">
+                                    <Link href="/dashboard/listings">My Listings</Link>
+                                </Button>
 
                                 <div className="h-8 w-px bg-surface-200 hidden md:block"></div>
 
-                                <div className="flex items-center gap-3 p-1 rounded-full border border-surface-200 bg-surface-50 pr-4 hover:border-surface-300 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.02)] cursor-pointer">
-                                    <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 shadow-sm border border-brand-200/50">
-                                        {authState === 'buyer' ? <Key className="w-4 h-4" /> : <Home className="w-4 h-4" />}
+                                <div
+                                    className="flex items-center gap-3 p-1 rounded-full border border-surface-200 bg-surface-50 pr-4 hover:border-surface-300 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.02)] cursor-pointer group"
+                                    onClick={() => logout()}
+                                >
+                                    <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 shadow-sm border border-brand-200/50 overflow-hidden">
+                                        {user?.avatarUrl ? (
+                                            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Home className="w-4 h-4" />
+                                        )}
                                     </div>
                                     <div className="hidden sm:flex flex-col">
                                         <span className="text-xs font-bold text-surface-900 leading-tight">
-                                            {authState === 'buyer' ? 'Alex Renter' : 'David Seller'}
+                                            {user?.name || 'User'}
                                         </span>
-                                        <span className="text-[10px] uppercase font-bold text-surface-500 tracking-wider leading-tight">
-                                            {authState === 'buyer' ? 'Tenant' : 'Owner'}
+                                        <span className="text-[10px] uppercase font-bold text-surface-500 tracking-wider leading-tight group-hover:text-red-500 transition-colors">
+                                            Logout
                                         </span>
                                     </div>
                                 </div>

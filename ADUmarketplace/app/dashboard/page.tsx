@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function DashboardIndex() {
-    const { authState } = useAuth()
+    const { isLoggedIn, isSeller } = useAuth()
     const router = useRouter()
 
     useEffect(() => {
-        if (authState === 'logged_out') {
+        if (!isLoggedIn) {
             router.replace('/onboarding')
-        } else if (authState === 'seller') {
+        } else if (isSeller) {
             router.replace('/dashboard/listings')
         } else {
             router.replace('/dashboard/saved')
         }
-    }, [authState, router])
+    }, [isLoggedIn, isSeller, router])
 
     return (
         <div className="flex items-center justify-center min-h-[50vh]">

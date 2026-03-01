@@ -2,8 +2,70 @@
 import { X, Building2 } from "lucide-react"
 import { useState } from "react"
 
+import { useAuth } from "@/lib/hooks/useAuth"
+
 export function AuthModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
     const [tab, setTab] = useState<'signin' | 'signup'>('signin')
+    const { login } = useAuth()
+
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [name, setName] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setIsLoading(true)
+        setError('')
+
+        try {
+            let token = ''
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+            if (tab === 'signup') {
+                const res = await fetch(`${apiUrl}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, name, role: 'buyer' })
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.detail || 'Registration failed')
+                token = data.access_token
+            } else {
+                const formData = new FormData()
+                formData.append('username', email)
+                formData.append('password', password)
+
+                const res = await fetch(`${apiUrl}/auth/token`, {
+                    method: 'POST',
+                    body: formData
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.detail || 'Login failed')
+                token = data.access_token
+            }
+
+            // Fetch profile
+            const meRes = await fetch(`${apiUrl}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const meData = await meRes.json()
+            if (!meRes.ok) throw new Error('Failed to fetch user profile')
+
+            login(token, meData)
+            onClose()
+
+            // reset form
+            setEmail('')
+            setPassword('')
+            setName('')
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
     if (!isOpen) return null
 
@@ -39,24 +101,53 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
                     </button>
                 </div>
 
-                <form className="space-y-5" onSubmit={e => e.preventDefault()}>
+                <form className="space-y-5" onSubmit={handleSubmit}>
+                    {error && (
+                        <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-xl border border-red-100">
+                            {error}
+                        </div>
+                    )}
                     {tab === 'signup' && (
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Full Name</label>
-                            <input type="text" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400" placeholder="Jane Doe" />
+                            <input
+                                type="text"
+                                required
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                placeholder="Jane Doe"
+                            />
                         </div>
                     )}
                     <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Email Address</label>
-                        <input type="email" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400" placeholder="you@example.com" />
+                        <input
+                            type="email"
+                            required
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                            placeholder="you@example.com"
+                        />
                     </div>
                     <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Password</label>
-                        <input type="password" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400" placeholder="••••••••" />
+                        <input
+                            type="password"
+                            required
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                            placeholder="••••••••"
+                        />
                     </div>
 
-                    <button className="w-full bg-emerald-600 text-white rounded-xl h-12 font-bold hover:bg-emerald-700 transition-colors mt-4 shadow-sm">
-                        {tab === 'signin' ? 'Sign In' : 'Create Account'}
+                    <button
+                        disabled={isLoading}
+                        className="w-full bg-emerald-600 text-white rounded-xl h-12 font-bold hover:bg-emerald-700 transition-colors mt-4 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? 'Please wait...' : (tab === 'signin' ? 'Sign In' : 'Create Account')}
                     </button>
                 </form>
 
