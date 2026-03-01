@@ -1,0 +1,11 @@
+# RAG ADU module — install with: pip install -r rag_adu/requirements.txt
+# Run from repo root or activate a venv first.
+
+pypdf>=4.0.0
+sentence-transformers>=3.0.0
+httpx>=0.27.0
+groq>=0.4.0
+google-generativeai>=0.8.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-dotenv>=1.0.0
