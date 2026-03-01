@@ -14,11 +14,13 @@ type DrawControlsProps = ConstructorParameters<typeof MapboxDraw>[0] & {
 export default function DrawControls(props: DrawControlsProps) {
     useControl<MapboxDraw>(
         () => new MapboxDraw(props),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ({ map }: { map: any }) => {
             map.on('draw.create', props.onCreate!);
             map.on('draw.update', props.onUpdate!);
             map.on('draw.delete', props.onDelete!);
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ({ map }: { map: any }) => {
             map.off('draw.create', props.onCreate!);
             map.off('draw.update', props.onUpdate!);

@@ -5,7 +5,6 @@
  * and results panel.
  */
 
-import { useEffect, useState } from "react";
 import type { AnalyzeResponse } from "@/types";
 
 /* ------------------------------------------------------------------ */
@@ -33,194 +32,104 @@ export default function ValidationHUD({
     onAnalyze,
     onReset,
 }: ValidationHUDProps) {
-    const [toastVisible, setToastVisible] = useState(false);
-    const [toastExiting, setToastExiting] = useState(false);
-
-    useEffect(() => {
-        if (result || error) {
-            setToastVisible(true);
-            setToastExiting(false);
-        }
-    }, [result, error]);
-
-    const dismissToast = () => {
-        setToastExiting(true);
-        setTimeout(() => {
-            setToastVisible(false);
-            setToastExiting(false);
-        }, 300);
-    };
-
     return (
         <>
             {/* ---- Step Indicator Panel ---- */}
-            <div className="fixed top-6 left-6 z-50 glass rounded-2xl p-5 w-80 shadow-2xl">
-                <h2 className="text-sm font-semibold tracking-widest uppercase text-zinc-400 mb-4">
-                    Feasibility Engine
-                </h2>
+            <div className="fixed top-6 left-6 z-50 w-80 shadow-xl saas-card flex flex-col rounded-xl ring-1 ring-slate-900/5">
 
-                <StepRow
-                    number={1}
-                    label="(Optional) Search Address"
-                    description="Find your property on the map"
-                    isActive={!selectedLocation}
-                    isComplete={!!selectedLocation}
-                />
+                {/* Header Section */}
+                <div className="pt-3 px-9 mb-3">
+                    <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight pl-1">
+                        ADU Feasibility
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-1 pl-1">Property qualification engine</p>
+                </div>
 
-                <StepRow
-                    number={2}
-                    label="Select Property on Map"
-                    description="Click anywhere on the map to pinpoint a property"
-                    isActive={!selectedLocation}
-                    isComplete={!!selectedLocation}
-                />
+                {/* Steps Section */}
+                <div className="px-6 space-y-2">
+                    <StepRow
+                        number={1}
+                        label="Location Search"
+                        description="Identify target parcel"
+                        isActive={!selectedLocation}
+                        isComplete={!!selectedLocation}
+                    />
 
-                <StepRow
-                    number={3}
-                    label="AI Property Scan"
-                    description="Detect structures & compute buildable area"
-                    isActive={isLoading}
-                    isComplete={!!result}
-                />
+                    <StepRow
+                        number={2}
+                        label="Point Selection"
+                        description="Verify property on map"
+                        isActive={!!selectedLocation && !result && !isLoading}
+                        isComplete={!!result}
+                    />
 
-                {/* Action Buttons */}
-                <div className="mt-5 flex flex-col gap-2">
+                    <StepRow
+                        number={3}
+                        label="AI Generation"
+                        description="Compute buildable geometry"
+                        isActive={isLoading}
+                        isComplete={!!result}
+                    />
+                </div>
+
+                {/* Unified Footer Section */}
+                <div className="mt-4 flex flex-col w-full bg-slate-50/50 rounded-b-xl">
                     {!result && !isLoading && selectedLocation && (
-                        <>
-                            <p className="text-xs text-zinc-400 mb-1 truncate">
-                                📍 {selectedLocation.name}
-                            </p>
+                        <div className="flex flex-col w-full">
+                            <div className="px-6 py-4 border-t border-slate-100">
+                                <div className="flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl">
+                                    <span className="text-sm font-medium text-slate-700 truncate flex-1 leading-tight">
+                                        📍 {selectedLocation.name}
+                                    </span>
+                                </div>
+                            </div>
                             <button
                                 onClick={onAnalyze}
                                 disabled={!selectedLocation}
-                                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer`}
+                                className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md cursor-pointer text-sm rounded-b-xl"
                             >
-                                🔍 Analyze Area
+                                Check Property
                             </button>
-                        </>
+                        </div>
                     )}
 
                     {!selectedLocation && !result && (
-                        <p className="text-xs text-zinc-500 text-center mt-2">
-                            Search an address or click the map to select
-                        </p>
+                        <div className="text-center py-6 border-t border-slate-100 rounded-b-xl">
+                            <p className="text-sm text-slate-500">
+                                Search an address to begin
+                            </p>
+                        </div>
                     )}
 
                     {(result || error) && (
-                        <button
-                            onClick={onReset}
-                            className="w-full py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 
-                         text-white text-sm font-medium transition-all duration-200 cursor-pointer"
-                        >
-                            🔄 Start Over
-                        </button>
+                        <div className="border-t border-slate-100">
+                            <button
+                                onClick={onReset}
+                                className="w-full py-5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold transition-all cursor-pointer block text-center rounded-b-xl"
+                            >
+                                Start New Project
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Loading indicator with scanning animation */}
+                    {isLoading && (
+                        <div className="py-6 px-6 border-t border-slate-100 rounded-b-xl">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm font-bold text-emerald-600 animate-pulse">Computing Zones...</span>
+                                <span className="text-xs font-semibold text-slate-500 font-mono">65%</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500"
+                                    style={{ width: "65%", transition: "width 0.5s ease-out" }} />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-3 text-center font-medium">
+                                Detecting structures & setbacks...
+                            </p>
+                        </div>
                     )}
                 </div>
-
-                {/* Loading indicator with scanning animation */}
-                {isLoading && (
-                    <div className="mt-4">
-                        <div className="flex items-center gap-2 text-xs text-zinc-400 mb-2">
-                            <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                            Scanning property…
-                        </div>
-                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-pulse"
-                                style={{ width: "60%", animation: "pulse 1.5s ease-in-out infinite" }} />
-                        </div>
-                        <p className="text-[10px] text-zinc-600 mt-1">
-                            Fetching parcel boundary → Detecting structures → Computing zones
-                        </p>
-                    </div>
-                )}
             </div>
-
-            {/* ---- Toast Notification ---- */}
-            {toastVisible && (result || error) && (
-                <div
-                    className={`fixed top-6 right-6 z-50 max-w-sm glass rounded-2xl p-5 shadow-2xl 
-                      ${toastExiting ? "toast-exit" : "toast-enter"}`}
-                >
-                    <button
-                        onClick={dismissToast}
-                        className="absolute top-3 right-3 text-zinc-500 hover:text-white text-sm cursor-pointer"
-                    >
-                        ✕
-                    </button>
-
-                    {error && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-red-400 text-lg">⚠️</span>
-                                <h3 className="text-sm font-semibold text-red-400">Error</h3>
-                            </div>
-                            <p className="text-xs text-zinc-300">{error}</p>
-                        </div>
-                    )}
-
-                    {result && result.is_valid && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-emerald-400 text-lg">✅</span>
-                                <h3 className="text-sm font-semibold text-emerald-400">
-                                    ADU Eligible!
-                                </h3>
-                            </div>
-                            {/* {result.address && (
-                                <p className="text-xs text-zinc-400 mb-2">📍 {result.address}</p>
-                            )} */}
-                            <div className="space-y-1.5 mb-3">
-                                {result.apn && (
-                                    <p className="text-xs text-emerald-400 font-semibold mb-2">
-                                        APN: {result.apn}
-                                    </p>
-                                )}
-                                <p className="text-xs text-zinc-300">
-                                    Property: <span className="font-semibold">{result.property_area_sqft.toLocaleString()} sq ft</span>
-                                </p>
-                                <p className="text-xs text-zinc-300">
-                                    Buildable: <span className="text-emerald-400 font-semibold">
-                                        {result.buildable_area_sqft.toLocaleString()} sq ft
-                                    </span>
-                                </p>
-                                <p className="text-xs text-zinc-300">
-                                    Setback: {result.setback_ft} ft · Max ADU: {result.max_adu_sqft.toLocaleString()} sq ft
-                                </p>
-                            </div>
-                            {result.obstacles.length > 0 && (
-                                <div className="mb-3">
-                                    <p className="text-xs text-zinc-400 mb-1">Structures detected:</p>
-                                    {result.obstacles.map((obs, i) => (
-                                        <p key={i} className="text-xs text-zinc-500">
-                                            • {obs.name} ({obs.area_sqft.toLocaleString()} sq ft, {Math.round(obs.confidence * 100)}% conf)
-                                        </p>
-                                    ))}
-                                </div>
-                            )}
-                            {result.est_cost_low && result.est_cost_high && (
-                                <p className="text-lg font-bold text-emerald-400">
-                                    ${result.est_cost_low.toLocaleString()} – ${result.est_cost_high.toLocaleString()}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    {result && !result.is_valid && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-red-400 text-lg">❌</span>
-                                <h3 className="text-sm font-semibold text-red-400">
-                                    Insufficient Space
-                                </h3>
-                            </div>
-                            <p className="text-xs text-zinc-300 mb-2">{result.message}</p>
-                            {/* {result.address && (
-                                <p className="text-xs text-zinc-400">📍 {result.address}</p>
-                            )} */}
-                        </div>
-                    )}
-                </div>
-            )}
         </>
     );
 }
@@ -243,31 +152,39 @@ function StepRow({
     isComplete: boolean;
 }) {
     return (
-        <div className="flex items-start gap-3 mb-3">
+        <div className={`relative flex items-center gap-3 p-1 rounded-xl transition-all border ${isActive ? 'bg-white border-slate-200 shadow-sm' : 'bg-transparent border-transparent opacity-70'}`}>
             <div
-                className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300
+                className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
           ${isComplete
-                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                        ? "bg-emerald-100 text-emerald-600 animate-checkmark"
                         : isActive
-                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 pulse-ring"
-                            : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+                            ? "bg-slate-800 text-white shadow-md shadow-slate-900/10"
+                            : "bg-slate-100 text-slate-500"
                     }`}
             >
-                {isComplete ? "✓" : number}
+                {isComplete ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                ) : (
+                    number
+                )}
             </div>
-            <div>
+            <div className="min-w-0">
                 <p
-                    className={`text-sm font-medium transition-colors duration-300 ${isComplete
-                        ? "text-emerald-400"
-                        : isActive
-                            ? "text-white"
-                            : "text-zinc-500"
+                    className={`text-sm font-bold tracking-tight transition-colors ${isComplete || isActive
+                        ? "text-slate-800"
+                        : "text-slate-500"
                         }`}
                 >
                     {label}
                 </p>
-                <p className="text-xs text-zinc-500">{description}</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-snug truncate">{description}</p>
             </div>
+
+            {isActive && !isComplete && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500/50" />
+            )}
         </div>
     );
 }
