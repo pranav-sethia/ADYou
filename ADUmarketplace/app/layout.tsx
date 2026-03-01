@@ -8,7 +8,7 @@ import { DevToolbar } from '@/components/layout/DevToolbar'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'ADU Base | The ADU Marketplace',
+    title: 'ADYou | The ADU Marketplace',
     description: 'Find, List, and Finance Accessory Dwelling Units.',
 }
 

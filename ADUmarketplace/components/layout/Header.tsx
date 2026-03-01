@@ -38,7 +38,7 @@ export function Header() {
                                 <LogoMark />
                             </div>
                             <span className="font-extrabold text-xl tracking-tight text-surface-900 group-hover:text-brand-600 transition-colors">
-                                ADU Base
+                                ADYou
                             </span>
                         </Link>
 

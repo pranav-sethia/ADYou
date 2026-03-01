@@ -26,10 +26,10 @@ export default function OnboardingPage() {
                     <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
                         <Home className="w-5 h-5 text-white" />
                     </div>
-                    <span className="text-2xl font-bold tracking-tight text-slate-900">ADU Base</span>
+                    <span className="text-2xl font-bold tracking-tight text-slate-900">ADYou</span>
                 </Link>
                 <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    Welcome to ADU Base
+                    Welcome to ADYou
                 </h2>
                 <p className="mt-2 text-slate-600">
                     How do you want to use the platform today?

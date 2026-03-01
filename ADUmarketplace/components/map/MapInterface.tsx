@@ -581,7 +581,7 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight">ADU Designer</h2>
                         <div className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-rose-100 text-rose-600 border border-rose-200'}`}>
-                            {isAduValid ? '✓ Valid' : '⨯ Blocked'}
+                            {isAduValid ? '✓ Plan ADU' : '⨯ Invalid'}
                         </div>
                     </div>
 
@@ -633,7 +633,7 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                                 step="1"
                                 value={aduSize}
                                 onChange={(e) => setAduSize(parseInt(e.target.value))}
-                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
+                                className="w-full h-[3px] bg-slate-200 rounded-full cursor-pointer appearance-none outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                             />
                         </div>
 
@@ -661,7 +661,7 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                                     setAduAspectRatio(0.3 + ((rawVal - 1) / 99) * 2.7);
                                 }}
                                 disabled={aduShapeType === 'custom'}
-                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
+                                className="w-full h-[3px] bg-slate-200 rounded-full cursor-pointer appearance-none outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all disabled:opacity-50"
                             />
                         </div>
 
@@ -678,7 +678,7 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                                 step="1"
                                 value={aduRotation}
                                 onChange={(e) => setAduRotation(parseInt(e.target.value))}
-                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
+                                className="w-full h-[3px] bg-slate-200 rounded-full cursor-pointer appearance-none outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                             />
                         </div>
                     </div>

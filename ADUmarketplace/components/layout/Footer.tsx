@@ -16,7 +16,7 @@ export function Footer() {
                     <div className="md:col-span-1">
                         <Link href="/" className="flex items-center gap-2 mb-6">
                             <LogoMark />
-                            <span className="text-xl font-extrabold text-surface-900 tracking-tight">ADU Base</span>
+                            <span className="text-xl font-extrabold text-surface-900 tracking-tight">ADYou</span>
                         </Link>
                         <p className="text-surface-500 text-sm leading-relaxed max-w-xs">
                             The first dedicated marketplace for renting, building, and managing Accessory Dwelling Units. Built for homeowners and smart renters.
@@ -57,7 +57,7 @@ export function Footer() {
 
                 <div className="mt-16 pt-8 border-t border-surface-200 flex flex-col md:flex-row justify-between items-center gap-4">
                     <p className="text-surface-400 text-sm">
-                        © {new Date().getFullYear()} ADU Base Inc. All rights reserved.
+                        © {new Date().getFullYear()} ADYou Inc. All rights reserved.
                     </p>
                     <div className="flex items-center gap-6">
                         <Link href="#" className="text-surface-400 hover:text-surface-900 transition-colors">
