@@ -3,12 +3,15 @@
 /* ------------------------------------------------------------------ */
 /*  Base reset                                                        */
 /* ------------------------------------------------------------------ */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@layer base {
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html,
@@ -17,8 +20,10 @@ body {
   width: 100%;
   overflow: hidden;
   font-family: var(--font-inter), system-ui, sans-serif;
-  background: #0a0a0f;
-  color: #e4e4e7;
+  background: #f8fafc;
+  /* Clean slate-50 background */
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ------------------------------------------------------------------ */
@@ -28,64 +33,184 @@ body {
   display: none !important;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Toast animation                                                   */
-/* ------------------------------------------------------------------ */
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* Premium Glass Mapbox controls */
+.mapboxgl-ctrl-group {
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: rgba(10, 10, 15, 0.9) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  overflow: hidden !important;
 }
 
-.toast-enter {
-  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* Force dark text in Mapbox SearchBox & Geocoders */
+.mapbox-search-box-input,
+.mapboxgl-ctrl-geocoder--input,
+.mapboxgl-ctrl-geocoder input,
+input[class^="mapbox-"],
+input[id^="mapbox-"],
+input,
+textarea {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  text-shadow: none !important;
 }
 
-@keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.96);
-  }
+/* Penetrate Shadow DOM of Mapbox Search component */
+mapbox-search-box::part(input) {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
 }
 
-.toast-exit {
-  animation: toast-out 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* Target Mapbox Search custom element variables */
+mapbox-search-box,
+mapbox-address-autofill {
+  --mapbox-search-box-text-color: #0f172a !important;
+  --mapbox-search-box-input-text-color: #0f172a !important;
+  --mapbox-search-box-suggestion-text-color: #0f172a !important;
+  --mapbox-search-box-background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.mapbox-search-box-input::placeholder,
+.mapboxgl-ctrl-geocoder--input::placeholder,
+input::placeholder {
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b !important;
+}
+
+/* Reset Chrome/Safari Autofill Styles */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Ensure icons are visible */
+.mapboxgl-ctrl-geocoder--icon {
+  fill: #ffffff !important;
+}
+
+.mapboxgl-ctrl-group button {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button:last-child {
+  border-bottom: none !important;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Glass panel utility                                               */
+/*  Standard Components - Light SaaS Mode                             */
 /* ------------------------------------------------------------------ */
-.glass {
-  background: rgba(10, 10, 15, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+
+.saas-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Pulse ring on active step                                         */
-/* ------------------------------------------------------------------ */
-@keyframes pulse-ring {
+.glass-pill {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+
+@keyframes holographic-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4);
   }
+
   70% {
-    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+    box-shadow: 0 0 0 20px rgba(167, 139, 250, 0);
   }
+
   100% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    box-shadow: 0 0 0 0 rgba(167, 139, 250, 0);
   }
 }
 
-.pulse-ring {
-  animation: pulse-ring 2s ease-in-out infinite;
+.animate-holographic {
+  animation: holographic-pulse 3s infinite;
+}
+
+/* Success Checkmark Animation */
+@keyframes checkmark-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-checkmark {
+  animation: checkmark-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Custom Selection - Emerald Accent */
+::selection {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #064e3b !important;
+}
+
+::-moz-selection {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #064e3b !important;
+}
+
+/* Custom Scrollbar - Sleek */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.3);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mapbox Draw Custom Overrides                                      */
+/* ------------------------------------------------------------------ */
+
+.mapboxgl-ctrl-group {
+  background-color: #ffffff !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden;
+}
+
+.mapboxgl-ctrl-group button {
+  width: 40px !important;
+  height: 40px !important;
+  transition: background-color 0.2s ease;
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Active drawing tool state */
+.mapboxgl-ctrl-group button.active {
+  background-color: rgba(16, 185, 129, 0.1) !important;
 }

@@ -7,12 +7,14 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
-import Map, { Source, Layer, NavigationControl, Marker } from "react-map-gl/mapbox";
+import Map, { Source, Layer, NavigationControl } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import * as turf from "@turf/turf";
+import type { Feature, Polygon, MultiPolygon } from "geojson";
 
 import ValidationHUD from "./ValidationHUD";
 import AddressSearch from "./AddressSearch";
+import DrawControls from "./DrawControls";
 
 import type { AnalyzeRequest, AnalyzeResponse } from "@/types";
 
@@ -53,6 +55,27 @@ export default function MapInterface() {
     const [aduRotation, setAduRotation] = useState<number>(0); // Degrees 0-360
     const [isAduValid, setIsAduValid] = useState<boolean>(true);
 
+    // Custom Drag State for ADU Polygon
+    const [isDraggingAdu, setIsDraggingAdu] = useState(false);
+    const [lastDragPos, setLastDragPos] = useState<{ lng: number; lat: number } | null>(null);
+
+    type ShapeType = 'rectangle' | 'l-shape' | 't-shape' | 'u-shape' | 'custom';
+    const [aduShapeType, setAduShapeType] = useState<ShapeType>('rectangle');
+    const [customBasePolygon, setCustomBasePolygon] = useState<GeoJSON.Polygon | null>(null);
+    const [isDrawingCustom, setIsDrawingCustom] = useState<boolean>(false);
+    const isDrawingCustomRef = useRef<boolean>(false);
+
+    const startDrawingCustom = useCallback(() => {
+        setIsDrawingCustom(true);
+        isDrawingCustomRef.current = true;
+    }, []);
+
+    const stopDrawingCustom = useCallback(() => {
+        setIsDrawingCustom(false);
+        // Delay releasing the lock to prevent the final Mapbox GL click from bubbling
+        setTimeout(() => { isDrawingCustomRef.current = false; }, 300);
+    }, []);
+
     // GeoJSON layers (derived from result)
     const propertyLayer = result?.property_geojson
         ? {
@@ -69,13 +92,6 @@ export default function MapInterface() {
             geometry: result.buildable_zone_geojson as unknown as GeoJSON.Geometry,
         }
         : null;
-
-    const obstacleFeatures = (result?.obstacles ?? [])
-        .map((obs, i) => ({
-            type: "Feature" as const,
-            properties: { name: obs.name, index: i },
-            geometry: obs.geojson as unknown as GeoJSON.Geometry,
-        }));
 
     /* ---------------------------------------------------------------- */
     /*  Handlers                                                        */
@@ -96,7 +112,48 @@ export default function MapInterface() {
         [],
     );
 
-    const handleMapClick = useCallback((e: any) => {
+    const handleDrawCreate = useCallback((e: { features: GeoJSON.Feature[] }) => {
+        const feature = e.features[0];
+        if (!feature || feature.geometry.type !== 'Polygon') return;
+
+        stopDrawingCustom();
+
+        // Calculate actual drawn area in square feet (1 sq m = 10.7639 sq ft)
+        const areaSqM = turf.area(feature);
+        const areaSqFt = areaSqM * 10.7639;
+
+        // Determine allowed bounds
+        const maxAllowed = result?.max_adu_sqft || 1200;
+        const minAllowed = 200;
+
+        // Clamp the drawn area to realistic ADU bounds
+        let targetSize = Math.round(areaSqFt);
+        if (targetSize > maxAllowed) targetSize = maxAllowed;
+        if (targetSize < minAllowed) targetSize = minAllowed;
+
+        // Automatically snap the slider/target to the area they actually drew
+        setAduSize(targetSize);
+
+        // Calculate centroid to center the polygon at aduCenter offset
+        const centroid = turf.centroid(feature);
+        const centerLng = centroid.geometry.coordinates[0];
+        const centerLat = centroid.geometry.coordinates[1];
+
+        setCustomBasePolygon(feature.geometry);
+        setAduCenter({ lng: centerLng, lat: centerLat });
+    }, [result, stopDrawingCustom]);
+
+    const handleMapClick = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
+        // Prevent map clicks from resetting the property if we are currently drawing a custom ADU
+        if (isDrawingCustom || isDrawingCustomRef.current) return;
+
+        // Don't reset if the user just clicked/dragged the ADU shape itself
+        if (isDraggingAdu || lastDragPos) return;
+
+        // If we already have an active property analysis, ignore stray map clicks.
+        // Users should use the explicit "Start Over" button in the HUD to clear state.
+        if (result) return;
+
         setSelectedLocation({
             lat: e.lngLat.lat,
             lng: e.lngLat.lng,
@@ -104,7 +161,65 @@ export default function MapInterface() {
         });
         setResult(null);
         setError(null);
+    }, [isDrawingCustom, isDraggingAdu, lastDragPos, result]);
+
+    /* ---------------------------------------------------------------- */
+    /*  ADU Drag Handlers                                               */
+    /* ---------------------------------------------------------------- */
+
+    const onAduEnter = useCallback(() => {
+        if (mapRef.current) {
+            mapRef.current.getCanvas().style.cursor = 'move';
+        }
     }, []);
+
+    const onAduLeave = useCallback(() => {
+        if (mapRef.current && !isDraggingAdu) {
+            mapRef.current.getCanvas().style.cursor = '';
+        }
+    }, [isDraggingAdu]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onAduMouseDown = useCallback((e: { features?: any[], preventDefault: () => void, lngLat: { lng: number; lat: number } }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const feature = e.features?.[0] as any;
+        if (feature?.layer?.id === 'adu-fill') {
+            e.preventDefault();
+            setIsDraggingAdu(true);
+            setLastDragPos({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+            if (mapRef.current) {
+                mapRef.current.getCanvas().style.cursor = 'grabbing';
+                // Disable map panning while dragging ADU
+                const map = mapRef.current.getMap();
+                if (map && map.dragPan) map.dragPan.disable();
+            }
+        }
+    }, []);
+
+    const onMapMouseMove = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
+        if (!isDraggingAdu || !lastDragPos || !aduCenter) return;
+
+        const deltaLng = e.lngLat.lng - lastDragPos.lng;
+        const deltaLat = e.lngLat.lat - lastDragPos.lat;
+
+        setAduCenter({
+            lng: aduCenter.lng + deltaLng,
+            lat: aduCenter.lat + deltaLat,
+        });
+        setLastDragPos({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    }, [isDraggingAdu, lastDragPos, aduCenter]);
+
+    const onMapMouseUp = useCallback(() => {
+        if (isDraggingAdu) {
+            setIsDraggingAdu(false);
+            setLastDragPos(null);
+            if (mapRef.current) {
+                mapRef.current.getCanvas().style.cursor = '';
+                const map = mapRef.current.getMap();
+                if (map && map.dragPan) map.dragPan.enable();
+            }
+        }
+    }, [isDraggingAdu]);
 
     /** Trigger the full analysis */
     const handleAnalyze = useCallback(async () => {
@@ -168,12 +283,15 @@ export default function MapInterface() {
         }
     }, [selectedLocation]);
 
-    /** Reset everything */
     const handleReset = useCallback(() => {
         setSelectedLocation(null);
         setResult(null);
         setError(null);
         setAduCenter(null);
+        setAduShapeType('rectangle');
+        setCustomBasePolygon(null);
+        setIsDrawingCustom(false);
+        isDrawingCustomRef.current = false;
     }, []);
 
     /* ---------------------------------------------------------------- */
@@ -182,49 +300,85 @@ export default function MapInterface() {
 
     const aduPolygon = useMemo(() => {
         if (!aduCenter) return null;
+        if (isDrawingCustom) return null; // Hide the active ADU block while drawing a custom shape
 
-        // Area = W * L. AspectRatio = W / L -> W = AR * L
-        // Area = AR * L^2 -> L = sqrt(Area / AR)
-        const lengthFt = Math.sqrt(aduSize / aduAspectRatio);
-        const widthFt = aduAspectRatio * lengthFt;
+        let basePoly: Feature<Polygon | MultiPolygon>;
 
-        // Add 0.0001 to avoid exact 0 rounding issues
-        const FEET_TO_KM = 0.0003048;
-        const lengthKm = lengthFt * FEET_TO_KM;
-        const widthKm = widthFt * FEET_TO_KM;
+        if (aduShapeType === 'custom') {
+            if (!customBasePolygon) return null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            basePoly = turf.feature(customBasePolygon as Polygon) as any;
+            // Translate the custom polygon so its original centroid matches the current draggable aduCenter
+            const centroid = turf.centroid(basePoly);
+            const distance = turf.distance(centroid, turf.point([aduCenter.lng, aduCenter.lat]));
+            const bearing = turf.bearing(centroid, turf.point([aduCenter.lng, aduCenter.lat]));
+            if (distance > 0) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                basePoly = turf.transformTranslate(basePoly, distance, bearing) as any;
+            }
+        } else {
+            // Build base shapes at abstract origin [0, 0] proportional to Aspect Ratio
+            const W = aduAspectRatio;
+            const L = 1.0;
+            const tX = W * 0.35; // 35% thickness for arms
+            const tY = L * 0.35;
 
-        const pt = turf.point([aduCenter.lng, aduCenter.lat]);
-        const halfW = widthKm / 2;
-        const halfL = lengthKm / 2;
+            let coords: number[][] = [];
 
-        try {
-            // Compute 4 corners starting from center
-            const n = turf.rhumbDestination(pt, halfL, 0);
-            const s = turf.rhumbDestination(pt, halfL, 180);
-
-            const nw = turf.rhumbDestination(n, halfW, -90);
-            const ne = turf.rhumbDestination(n, halfW, 90);
-            const se = turf.rhumbDestination(s, halfW, 90);
-            const sw = turf.rhumbDestination(s, halfW, -90);
-
-            let poly = turf.polygon([[
-                nw.geometry.coordinates,
-                ne.geometry.coordinates,
-                se.geometry.coordinates,
-                sw.geometry.coordinates,
-                nw.geometry.coordinates
-            ]]);
-
-            if (aduRotation !== 0) {
-                poly = turf.transformRotate(poly, aduRotation, { pivot: [aduCenter.lng, aduCenter.lat] });
+            if (aduShapeType === 'rectangle') {
+                coords = [
+                    [-W / 2, L / 2], [-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2], [-W / 2, L / 2]
+                ];
+            } else if (aduShapeType === 'l-shape') {
+                coords = [
+                    [-W / 2, L / 2], [-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, -L / 2 + tY],
+                    [-W / 2 + tX, -L / 2 + tY], [-W / 2 + tX, L / 2], [-W / 2, L / 2]
+                ];
+            } else if (aduShapeType === 't-shape') {
+                coords = [
+                    [-W / 2, L / 2], [-W / 2, L / 2 - tY], [-(tX / 2), L / 2 - tY], [-(tX / 2), -L / 2],
+                    [(tX / 2), -L / 2], [(tX / 2), L / 2 - tY], [W / 2, L / 2 - tY], [W / 2, L / 2], [-W / 2, L / 2]
+                ];
+            } else if (aduShapeType === 'u-shape') {
+                coords = [
+                    [-W / 2, L / 2], [-W / 2, -L / 2], [W / 2, -L / 2], [W / 2, L / 2],
+                    [W / 2 - tX, L / 2], [W / 2 - tX, -L / 2 + tY], [-W / 2 + tX, -L / 2 + tY],
+                    [-W / 2 + tX, L / 2], [-W / 2, L / 2]
+                ];
             }
 
-            return poly;
-        } catch (e) {
+            // Convert abstract proportional coords to real lat/lng around the aduCenter
+            const m = 10; // arbitrary local scale
+            const DEG_PER_METER_LAT = 1 / 111111;
+            const DEG_PER_METER_LNG = 1 / (111111 * Math.cos(aduCenter.lat * Math.PI / 180));
+
+            const realCoords = coords.map(p => [
+                aduCenter.lng + p[0] * m * DEG_PER_METER_LNG,
+                aduCenter.lat + p[1] * m * DEG_PER_METER_LAT
+            ]);
+            basePoly = turf.polygon([realCoords]);
+        }
+
+        try {
+            // Target Area in Square Meters (1 sq ft = 0.092903 sq m)
+            const targetAreaSqM = aduSize * 0.09290304;
+            const currentAreaSqM = turf.area(basePoly);
+            const scaleFactor = Math.sqrt(targetAreaSqM / currentAreaSqM);
+
+            // Auto-Scale it to fit the exact slider Area
+            let finalPoly = turf.transformScale(basePoly, scaleFactor);
+
+            // Apply Slider Rotation
+            if (aduRotation !== 0) {
+                finalPoly = turf.transformRotate(finalPoly, aduRotation, { pivot: [aduCenter.lng, aduCenter.lat] });
+            }
+
+            return finalPoly.geometry as GeoJSON.Polygon;
+        } catch (e: unknown) {
             console.error("Failed to generate ADU polygon", e);
             return null;
         }
-    }, [aduCenter, aduSize, aduAspectRatio, aduRotation]);
+    }, [aduCenter, aduSize, aduAspectRatio, aduRotation, aduShapeType, customBasePolygon, isDrawingCustom]);
 
     useEffect(() => {
         if (!aduPolygon || !result?.buildable_zone_geojson) {
@@ -244,7 +398,7 @@ export default function MapInterface() {
             );
 
             setIsAduValid(isInside);
-        } catch (e) {
+        } catch (e: unknown) {
             console.error("Validation error:", e);
             setIsAduValid(false);
         }
@@ -270,11 +424,33 @@ export default function MapInterface() {
                 style={{ width: "100%", height: "100%" }}
                 attributionControl={false}
                 onClick={handleMapClick}
-                cursor="crosshair"
+                onMouseDown={onAduMouseDown}
+                onMouseMove={onMapMouseMove}
+                onMouseUp={onMapMouseUp}
+                cursor={isDrawingCustom ? "crosshair" : "auto"}
+                interactiveLayerIds={buildableLayer ? ['adu-fill'] : undefined}
+                onMouseEnter={onAduEnter}
+                onMouseLeave={onAduLeave}
             >
-                <NavigationControl position="bottom-right" />
+                <NavigationControl position="top-right" />
 
-                {/* Property Boundary — dashed indigo outline */}
+                {/* Custom Drawing Tools */}
+                {isDrawingCustom && (
+                    <DrawControls
+                        position="top-right"
+                        displayControlsDefault={false}
+                        controls={{
+                            polygon: true,
+                            trash: true,
+                        }}
+                        defaultMode="draw_polygon"
+                        onCreate={handleDrawCreate}
+                        onUpdate={() => { }}
+                        onDelete={() => { }}
+                    />
+                )}
+
+                {/* Property Boundary — Soft white glow */}
                 {propertyLayer && (
                     <Source
                         id="property-boundary"
@@ -288,25 +464,24 @@ export default function MapInterface() {
                             id="property-fill"
                             type="fill"
                             paint={{
-                                "fill-color": "#6366f1",
-                                "fill-opacity": 0.08,
+                                "fill-color": "#ffffff",
+                                "fill-opacity": 0.03,
                             }}
                         />
                         <Layer
                             id="property-outline"
                             type="line"
                             paint={{
-                                "line-color": "#818cf8",
-                                "line-width": 2.5,
-                                "line-dasharray": [3, 2],
+                                "line-color": "#000000",
+                                "line-width": 1.5,
+                                "line-dasharray": [6, 4],
+                                "line-opacity": 0.4,
                             }}
                         />
                     </Source>
                 )}
 
-                {/* Obstacles layer removed since backend no longer returns them. */}
-
-                {/* Buildable Zone — glowing green */}
+                {/* Buildable Zone — soft lavender glow */}
                 {buildableLayer && (
                     <Source
                         id="buildable-zone"
@@ -320,20 +495,22 @@ export default function MapInterface() {
                             id="buildable-fill"
                             type="fill"
                             paint={{
-                                "fill-color": "#22c55e",
-                                "fill-opacity": 0.3,
+                                "fill-color": "#10b981", // Emerald-500
+                                "fill-opacity": 0.12,
                             }}
                         />
                         <Layer
                             id="buildable-outline"
                             type="line"
                             paint={{
-                                "line-color": "#22c55e",
-                                "line-width": 2.5,
+                                "line-color": "#10b981",
+                                "line-width": 2,
+                                "line-opacity": 0.6,
                             }}
                         />
                     </Source>
                 )}
+
                 {/* Dynamic ADU Polygon */}
                 {aduPolygon && (
                     <Source
@@ -341,58 +518,102 @@ export default function MapInterface() {
                         type="geojson"
                         data={{
                             type: "FeatureCollection",
-                            features: [aduPolygon],
+                            features: [{
+                                type: "Feature",
+                                properties: {},
+                                geometry: aduPolygon
+                            }],
                         }}
                     >
                         <Layer
                             id="adu-fill"
                             type="fill"
                             paint={{
-                                "fill-color": isAduValid ? "#3b82f6" : "#ef4444",
-                                "fill-opacity": 0.5,
+                                "fill-color": isAduValid ? "#10b981" : "#F43F5E", // Emerald vs Rose
+                                "fill-opacity": 0.7,
                             }}
                         />
                         <Layer
                             id="adu-outline"
                             type="line"
                             paint={{
-                                "line-color": isAduValid ? "#2563eb" : "#dc2626",
-                                "line-width": 3,
+                                "line-color": isAduValid ? "#059669" : "#FB7185",
+                                "line-width": 2,
                             }}
                         />
                     </Source>
                 )}
-
-                {/* Draggable Marker for the ADU */}
-                {aduCenter && (
-                    <Marker
-                        longitude={aduCenter.lng}
-                        latitude={aduCenter.lat}
-                        draggable
-                        onDrag={(e) => setAduCenter({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
-                        anchor="center"
-                    >
-                        <div className="w-5 h-5 bg-white border-2 border-slate-800 rounded-full shadow-md cursor-grab active:cursor-grabbing hover:scale-110 transition-transform" />
-                    </Marker>
-                )}
             </Map>
 
+            {/* Drawing State Overlay */}
+            {isDrawingCustom && (
+                <div className="absolute bottom-10 right-10 w-80 saas-card rounded-xl p-6 text-center pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
+                    <h3 className="font-bold tracking-tight text-slate-800 mb-2">Custom ADU Canvas</h3>
+                    <p className="text-xs text-slate-500 mb-6 px-2">Click to place points. Max area: {result?.max_adu_sqft || 1200} sq ft (scaled automatically).</p>
+                    <button
+                        onClick={() => {
+                            if (!customBasePolygon) {
+                                setAduShapeType('rectangle');
+                            }
+                            stopDrawingCustom();
+                        }}
+                        className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-2xl transition-all cursor-pointer"
+                    >
+                        Cancel Sketch
+                    </button>
+                </div>
+            )}
+
             {/* Interactive ADU Control Panel */}
-            {result && aduCenter && (
-                <div className="absolute bottom-6 right-6 w-80 bg-slate-900/90 backdrop-blur-md rounded-xl shadow-2xl border border-slate-700 p-5 text-slate-200 pointer-events-auto z-10">
+            {result && aduCenter && !isDrawingCustom && (
+                <div className="absolute bottom-10 right-10 w-80 saas-card rounded-xl p-5 text-slate-800 pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-lg text-white">ADU Designer</h3>
-                        <div className={`px-2 py-1 rounded-md text-xs font-bold ${isAduValid ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                            {isAduValid ? 'VALID' : 'INVALID PLACEMENT'}
+                        <h3 className="font-bold tracking-tight text-lg">ADU Designer</h3>
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-rose-100 text-rose-600 border border-rose-200'}`}>
+                            {isAduValid ? '✓ Valid' : '⨯ Blocked'}
                         </div>
                     </div>
 
-                    <div className="space-y-5">
-                        {/* Size Slider */}
+                    <div className="space-y-4">
+                        {/* Shape Selector */}
                         <div>
-                            <div className="flex justify-between text-sm mb-1 text-slate-400">
-                                <span>Size (Area)</span>
-                                <span className="text-white font-mono">{aduSize} sq ft</span>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Modular Profiles</p>
+                            <div className="grid grid-cols-5 p-1 bg-slate-50 rounded-2xl border border-slate-200">
+                                {['rectangle', 'l-shape', 't-shape', 'u-shape'].map((type) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => {
+                                            setAduShapeType(type as ShapeType);
+                                            stopDrawingCustom();
+                                        }}
+                                        className={`py-2 flex items-center justify-center rounded-xl transition-all cursor-pointer
+                                            ${aduShapeType === type ? 'bg-white text-emerald-600 shadow-sm border border-slate-200 ring-1 ring-slate-900/5' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'}`}
+                                    >
+                                        <span className="text-base">
+                                            {type === 'rectangle' ? '⬛' :
+                                                type === 'l-shape' ? '▛' :
+                                                    type === 't-shape' ? '┳' : '⨆'}
+                                        </span>
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={() => {
+                                        setAduShapeType('custom');
+                                        startDrawingCustom();
+                                    }}
+                                    className={`py-2 flex items-center justify-center rounded-xl transition-all cursor-pointer
+                                        ${aduShapeType === 'custom' ? 'bg-white text-emerald-600 shadow-sm border border-slate-200 ring-1 ring-slate-900/5' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'}`}
+                                >
+                                    ✏️
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Size Slider */}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Floor Area</p>
+                                <span className="text-sm font-bold text-slate-800 tabular-nums">{aduSize} <span className="text-[10px] font-normal text-slate-500">ft²</span></span>
                             </div>
                             <input
                                 type="range"
@@ -401,15 +622,21 @@ export default function MapInterface() {
                                 step="50"
                                 value={aduSize}
                                 onChange={(e) => setAduSize(parseInt(e.target.value))}
-                                className="w-full accent-indigo-500"
+                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
                             />
                         </div>
 
-                        {/* Shape Slider */}
-                        <div>
-                            <div className="flex justify-between text-sm mb-1 text-slate-400">
-                                <span>Shape</span>
-                                <span>{aduAspectRatio === 1 ? 'Square' : aduAspectRatio > 1 ? 'Wide' : 'Tall'}</span>
+                        {/* Shape Aspect Ratio Slider */}
+                        <div className={`space-y-3 transition-opacity ${aduShapeType === 'custom' ? 'opacity-30 pointer-events-none' : ''}`}>
+                            <div className="flex justify-between items-end">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Dimensions</p>
+                                {aduShapeType !== 'custom' && (
+                                    <span className="text-xs font-semibold text-slate-800">
+                                        {aduShapeType === 'rectangle'
+                                            ? (aduAspectRatio === 1 ? 'Square' : aduAspectRatio > 1 ? 'Wide' : 'Tall')
+                                            : (aduAspectRatio === 1 ? 'Balanced' : aduAspectRatio > 1 ? 'Extended' : 'Deep')}
+                                    </span>
+                                )}
                             </div>
                             <input
                                 type="range"
@@ -418,15 +645,16 @@ export default function MapInterface() {
                                 step="0.1"
                                 value={aduAspectRatio}
                                 onChange={(e) => setAduAspectRatio(parseFloat(e.target.value))}
-                                className="w-full accent-indigo-500"
+                                disabled={aduShapeType === 'custom'}
+                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
                             />
                         </div>
 
                         {/* Rotation Slider */}
-                        <div>
-                            <div className="flex justify-between text-sm mb-1 text-slate-400">
-                                <span>Rotation</span>
-                                <span className="font-mono">{aduRotation}°</span>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Orientation</p>
+                                <span className="text-sm font-bold text-slate-800 tabular-nums">{aduRotation}°</span>
                             </div>
                             <input
                                 type="range"
@@ -435,7 +663,7 @@ export default function MapInterface() {
                                 step="5"
                                 value={aduRotation}
                                 onChange={(e) => setAduRotation(parseInt(e.target.value))}
-                                className="w-full accent-indigo-500"
+                                className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
                             />
                         </div>
                     </div>
