@@ -38,7 +38,7 @@ export default function ValidationHUD({
             <div className="fixed top-6 left-6 z-50 w-80 shadow-xl saas-card flex flex-col rounded-xl ring-1 ring-slate-900/5">
 
                 {/* Header Section */}
-                <div className="pt-6 px-9 mb-3">
+                <div className="pt-3 px-9 mb-3">
                     <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight pl-1">
                         ADU Feasibility
                     </h2>
@@ -152,7 +152,7 @@ function StepRow({
     isComplete: boolean;
 }) {
     return (
-        <div className={`relative flex items-center gap-3 p-3 rounded-xl transition-all border ${isActive ? 'bg-white border-slate-200 shadow-sm' : 'bg-transparent border-transparent opacity-70'}`}>
+        <div className={`relative flex items-center gap-3 p-1 rounded-xl transition-all border ${isActive ? 'bg-white border-slate-200 shadow-sm' : 'bg-transparent border-transparent opacity-70'}`}>
             <div
                 className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
           ${isComplete

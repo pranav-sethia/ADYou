@@ -547,9 +547,9 @@ export default function MapInterface() {
 
             {/* Drawing State Overlay */}
             {isDrawingCustom && (
-                <div className="absolute bottom-10 right-10 w-80 saas-card rounded-xl p-6 text-center pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
-                    <h3 className="font-bold tracking-tight text-slate-800 mb-2">Custom ADU Canvas</h3>
-                    <p className="text-xs text-slate-500 mb-6 px-2">Click to place points. Max area: {result?.max_adu_sqft || 1200} sq ft (scaled automatically).</p>
+                <div className="absolute bottom-10 right-10 w-80 saas-card rounded-xl p-5 text-center pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
+                    <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight mb-1">Custom ADU Canvas</h2>
+                    <p className="text-sm text-slate-500 mb-4 px-2">Click to place points. Max area: {result?.max_adu_sqft || 1200} sq ft (scaled automatically).</p>
                     <button
                         onClick={() => {
                             if (!customBasePolygon) {
@@ -568,7 +568,7 @@ export default function MapInterface() {
             {result && aduCenter && !isDrawingCustom && (
                 <div className="absolute bottom-10 right-10 w-80 saas-card rounded-xl p-5 text-slate-800 pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold tracking-tight text-lg">ADU Designer</h3>
+                        <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight">ADU Designer</h2>
                         <div className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-rose-100 text-rose-600 border border-rose-200'}`}>
                             {isAduValid ? '✓ Valid' : '⨯ Blocked'}
                         </div>
@@ -590,7 +590,7 @@ export default function MapInterface() {
                                             ${aduShapeType === type ? 'bg-white text-emerald-600 shadow-sm border border-slate-200 ring-1 ring-slate-900/5' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'}`}
                                     >
                                         <span className="text-base">
-                                            {type === 'rectangle' ? '⬛' :
+                                            {type === 'rectangle' ? '█' :
                                                 type === 'l-shape' ? '▛' :
                                                     type === 't-shape' ? '┳' : '⨆'}
                                         </span>
@@ -604,7 +604,7 @@ export default function MapInterface() {
                                     className={`py-2 flex items-center justify-center rounded-xl transition-all cursor-pointer
                                         ${aduShapeType === 'custom' ? 'bg-white text-emerald-600 shadow-sm border border-slate-200 ring-1 ring-slate-900/5' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'}`}
                                 >
-                                    ✏️
+                                    <span className="text-base">✎</span>
                                 </button>
                             </div>
                         </div>
