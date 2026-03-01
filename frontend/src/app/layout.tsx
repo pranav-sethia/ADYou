@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
+const geist = Geist({ subsets: ["latin"] });
+const geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ADU Feasibility Engine — Irvine, CA",
+  title: "ADU Advisor — AI-Powered ADU Guidance",
   description:
-    "Draw your property and ADU on a satellite map to instantly validate placement against Irvine zoning laws.",
+    "Ask questions about California ADU regulations, permits, and requirements powered by RAG and the HCD ADU Handbook.",
 };
 
 export default function RootLayout({
@@ -19,8 +17,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+    <html lang="en" className="dark">
+      <body className="font-sans antialiased bg-background text-foreground">
+        {children}
+      </body>
     </html>
   );
 }

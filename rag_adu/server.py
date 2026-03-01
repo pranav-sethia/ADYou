@@ -135,8 +135,14 @@ def get_embedding_model():
     return _embedding_model
 
 
+class HistoryMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
 class ChatRequest(BaseModel):
     message: str
+    history: list[HistoryMessage] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -144,7 +150,10 @@ class ChatResponse(BaseModel):
     sources: list[dict]
 
 
-def call_groq(prompt: str, system: str) -> str:
+MAX_HISTORY_TURNS = 10
+
+
+def call_groq(messages: list[dict]) -> str:
     import groq
     api_key = get_secret("GROQ_API_KEY")
     if not api_key:
@@ -157,10 +166,7 @@ def call_groq(prompt: str, system: str) -> str:
     try:
         resp = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             max_tokens=1024,
         )
         return resp.choices[0].message.content or ""
@@ -168,7 +174,7 @@ def call_groq(prompt: str, system: str) -> str:
         raise HTTPException(status_code=502, detail=f"Groq request failed: {exc}") from exc
 
 
-def call_gemini(prompt: str, system: str) -> str:
+def call_gemini(messages: list[dict]) -> str:
     try:
         import google.generativeai as genai
     except ImportError:
@@ -184,7 +190,14 @@ def call_gemini(prompt: str, system: str) -> str:
         )
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    full_prompt = f"{system}\n\n{prompt}"
+    # Gemini doesn't support chat-style message arrays natively in the
+    # simple generate_content API, so we flatten the conversation into a
+    # single prompt while preserving the turn structure.
+    parts: list[str] = []
+    for msg in messages:
+        role_label = msg["role"].upper()
+        parts.append(f"[{role_label}]\n{msg['content']}")
+    full_prompt = "\n\n".join(parts)
     resp = model.generate_content(full_prompt)
     return resp.text or ""
 
@@ -211,15 +224,25 @@ def chat(req: ChatRequest) -> ChatResponse:
     system = (
         "You are an ADU advisor. Answer only using the following context from the "
         "California HCD ADU Handbook. If the answer is not in the context, say so clearly. "
-        "Keep answers concise and cite page numbers when relevant."
+        "Keep answers concise and cite page numbers when relevant.\n\n"
+        f"Context from the handbook:\n\n{context}"
     )
-    user_prompt = f"Context from the handbook:\n\n{context}\n\nUser question: {query}"
+
+    # Build the full message array with conversation history
+    messages: list[dict] = [{"role": "system", "content": system}]
+
+    if req.history:
+        for turn in req.history[-MAX_HISTORY_TURNS * 2:]:
+            if turn.role in ("user", "assistant"):
+                messages.append({"role": turn.role, "content": turn.content})
+
+    messages.append({"role": "user", "content": query})
 
     # Prefer Groq, fallback to Gemini
     if get_secret("GROQ_API_KEY"):
-        answer = call_groq(user_prompt, system)
+        answer = call_groq(messages)
     elif get_secret("GOOGLE_API_KEY"):
-        answer = call_gemini(user_prompt, system)
+        answer = call_gemini(messages)
     else:
         diag = env_diagnostics()
         raise HTTPException(
