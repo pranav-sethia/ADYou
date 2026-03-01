@@ -11,6 +11,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from agents import Agent, Runner, set_tracing_disabled
+from agents.extensions.models.litellm_model import LitellmModel
+
+set_tracing_disabled(True)
+
 # Initialize the router
 router = APIRouter()
 
@@ -56,8 +61,7 @@ def env_diagnostics() -> dict:
     return {
         "root_env_exists": root_env.exists(),
         "frontend_env_exists": fe_env.exists(),
-        "root_env_has_groq": bool(get_secret("GROQ_API_KEY")),
-        "root_env_has_google": bool(get_secret("GOOGLE_API_KEY")),
+        "root_env_has_gemini": bool(get_secret("GEMINI_API_KEY")),
     }
 
 
@@ -131,54 +135,8 @@ class ChatResponse(BaseModel):
 MAX_HISTORY_TURNS = 10
 
 
-def call_groq(messages: list[dict]) -> str:
-    import groq
-    api_key = get_secret("GROQ_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GROQ_API_KEY not set. Add it to .env",
-        )
-    model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
-    client = groq.Groq(api_key=api_key)
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=1024,
-        )
-        return resp.choices[0].message.content or ""
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Groq request failed: {exc}") from exc
-
-
-def call_gemini(messages: list[dict]) -> str:
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Generative AI not installed. pip install google-generativeai",
-        )
-    api_key = get_secret("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GOOGLE_API_KEY not set. Add it to .env",
-        )
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    parts: list[str] = []
-    for msg in messages:
-        role_label = msg["role"].upper()
-        parts.append(f"[{role_label}]\n{msg['content']}")
-    full_prompt = "\n\n".join(parts)
-    resp = model.generate_content(full_prompt)
-    return resp.text or ""
-
-
 @router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest) -> ChatResponse:
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
     query = req.message.strip()
@@ -203,32 +161,38 @@ def chat(req: ChatRequest) -> ChatResponse:
         f"Context from the handbook:\n\n{context}"
     )
 
-    # Build the full message array with conversation history
-    messages: list[dict] = [{"role": "system", "content": system}]
-
+    history_text = ""
     if req.history:
         for turn in req.history[-MAX_HISTORY_TURNS * 2:]:
             if turn.role in ("user", "assistant"):
-                messages.append({"role": turn.role, "content": turn.content})
+                role = "User" if turn.role == "user" else "Assistant"
+                history_text += f"{role}: {turn.content}\n\n"
 
-    messages.append({"role": "user", "content": query})
+    instructions = system
+    if history_text:
+        instructions += f"\n\n---\n**Conversation so far:**\n{history_text}"
 
-    # Prefer Groq, fallback to Gemini
-    if get_secret("GROQ_API_KEY"):
-        answer = call_groq(messages)
-    elif get_secret("GOOGLE_API_KEY"):
-        answer = call_gemini(messages)
-    else:
+    api_key = get_secret("GEMINI_API_KEY")
+    if not api_key:
         diag = env_diagnostics()
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Set GROQ_API_KEY or GOOGLE_API_KEY. "
-                f"Diagnostics: {diag}"
-            ),
+            detail=f"GEMINI_API_KEY not set. Add it to .env. Diagnostics: {diag}",
         )
 
-    return ChatResponse(answer=answer.strip(), sources=sources)
+    agent = Agent(
+        name="ADU Advisor",
+        instructions=instructions,
+        model=LitellmModel(model="gemini/gemini-2.5-flash", api_key=api_key),
+    )
+
+    try:
+        result = await Runner.run(agent, input=query)
+        answer = result.final_output.strip()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Agent request failed: {exc}") from exc
+
+    return ChatResponse(answer=answer, sources=sources)
 
 
 @router.get("/debug/config")
