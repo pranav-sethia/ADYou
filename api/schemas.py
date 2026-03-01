@@ -2,7 +2,8 @@
 Pydantic models for the ADU Feasibility Engine API.
 """
 
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, Field, model_validator
 
 
 class GeoJSONGeometry(BaseModel):
@@ -16,15 +17,36 @@ class GeoJSONGeometry(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Payload for the /analyze endpoint."""
+    """Payload for the /analyze endpoint.
+    
+    Either user_drawn_geojson OR (lat + lng) must be provided.
+    If both are provided, user_drawn_geojson takes priority.
+    """
 
-    user_drawn_geojson: GeoJSONGeometry = Field(
-        ..., description="The polygon drawn by the user defining their property/build area."
+    user_drawn_geojson: Optional[GeoJSONGeometry] = Field(
+        default=None,
+        description="The polygon drawn by the user defining their property/build area.",
+    )
+    lat: Optional[float] = Field(
+        default=None,
+        description="Latitude for auto-fetching parcel boundary via ReportAll.",
+    )
+    lng: Optional[float] = Field(
+        default=None,
+        description="Longitude for auto-fetching parcel boundary via ReportAll.",
     )
     location: str = Field(
         default="irvine_ca",
         description="Location key for zoning rules (e.g. 'irvine_ca').",
     )
+
+    @model_validator(mode="after")
+    def check_at_least_one_input(self):
+        if not self.user_drawn_geojson and (self.lat is None or self.lng is None):
+            raise ValueError(
+                "Either 'user_drawn_geojson' or both 'lat' and 'lng' must be provided."
+            )
+        return self
 
 
 class DetectedObstacle(BaseModel):
@@ -58,3 +80,15 @@ class AnalyzeResponse(BaseModel):
     max_adu_sqft: float
     est_cost_low: float | None = None
     est_cost_high: float | None = None
+    parcel_source: str = Field(
+        default="manual",
+        description="'reportall' if auto-fetched, 'manual' if user-drawn.",
+    )
+    apn: str | None = Field(
+        default=None,
+        description="Assessor Parcel Number from ReportAll (if available).",
+    )
+    parcel_address: str | None = Field(
+        default=None,
+        description="Site address from ReportAll (if available).",
+    )

@@ -14,7 +14,6 @@ import type { AnalyzeResponse } from "@/types";
 
 interface ValidationHUDProps {
     selectedLocation: { lat: number; lng: number; name: string } | null;
-    hasDrawnBoundary: boolean;
     isLoading: boolean;
     result: AnalyzeResponse | null;
     error: string | null;
@@ -28,7 +27,6 @@ interface ValidationHUDProps {
 
 export default function ValidationHUD({
     selectedLocation,
-    hasDrawnBoundary,
     isLoading,
     result,
     error,
@@ -65,16 +63,16 @@ export default function ValidationHUD({
                     number={1}
                     label="(Optional) Search Address"
                     description="Find your property on the map"
-                    isActive={!selectedLocation && !hasDrawnBoundary}
+                    isActive={!selectedLocation}
                     isComplete={!!selectedLocation}
                 />
 
                 <StepRow
                     number={2}
-                    label="Draw Analysis Boundary"
-                    description="Use the polygon tool (top right) to outline the build area"
-                    isActive={!hasDrawnBoundary}
-                    isComplete={hasDrawnBoundary}
+                    label="Select Property on Map"
+                    description="Click anywhere on the map to pinpoint a property"
+                    isActive={!selectedLocation}
+                    isComplete={!!selectedLocation}
                 />
 
                 <StepRow
@@ -87,29 +85,24 @@ export default function ValidationHUD({
 
                 {/* Action Buttons */}
                 <div className="mt-5 flex flex-col gap-2">
-                    {!result && !isLoading && (
+                    {!result && !isLoading && selectedLocation && (
                         <>
-                            {selectedLocation && (
-                                <p className="text-xs text-zinc-400 mb-1 truncate">
-                                    📍 {selectedLocation.name}
-                                </p>
-                            )}
+                            <p className="text-xs text-zinc-400 mb-1 truncate">
+                                📍 {selectedLocation.name}
+                            </p>
                             <button
                                 onClick={onAnalyze}
-                                disabled={!hasDrawnBoundary}
-                                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 
-                                ${hasDrawnBoundary
-                                        ? "bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
-                                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"}`}
+                                disabled={!selectedLocation}
+                                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-200 bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer`}
                             >
                                 🔍 Analyze Area
                             </button>
                         </>
                     )}
 
-                    {!hasDrawnBoundary && !result && (
+                    {!selectedLocation && !result && (
                         <p className="text-xs text-zinc-500 text-center mt-2">
-                            Search for an address or draw a boundary to get started
+                            Search an address or click the map to select
                         </p>
                     )}
 
@@ -177,6 +170,11 @@ export default function ValidationHUD({
                                 <p className="text-xs text-zinc-400 mb-2">📍 {result.address}</p>
                             )} */}
                             <div className="space-y-1.5 mb-3">
+                                {result.apn && (
+                                    <p className="text-xs text-emerald-400 font-semibold mb-2">
+                                        APN: {result.apn}
+                                    </p>
+                                )}
                                 <p className="text-xs text-zinc-300">
                                     Property: <span className="font-semibold">{result.property_area_sqft.toLocaleString()} sq ft</span>
                                 </p>

@@ -19,14 +19,13 @@ from api.schemas import (
     GeoJSONGeometry,
 )
 from api.config.zoning_rules import get_zoning_rule
-from api.engine.geometry import (
+from engine.geometry import (
     shapely_to_geojson,
     project_to_feet,
     calculate_area_sqft,
     compute_buildable_zone,
     get_buildable_area_sqft,
 )
-from api.engine.ai_layer import LangSAMObstacleDetector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,22 +48,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Lazy-loaded detector (heavy model, load on first request)
-_detector: LangSAMObstacleDetector | None = None
-
 # Cost estimates
 _COST_PER_SQFT_LOW = 200.0
 _COST_PER_SQFT_HIGH = 400.0
-
-
-def get_detector() -> LangSAMObstacleDetector:
-    """Get or create the singleton obstacle detector."""
-    global _detector
-    if _detector is None:
-        _detector = LangSAMObstacleDetector()
-    return _detector
-
-
 # ---------------------------------------------------------------------------
 # Main endpoint
 # ---------------------------------------------------------------------------
@@ -75,7 +61,7 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
     Fully automated ADU feasibility analysis.
 
     Pipeline:
-      1. Fetch parcel boundary from Regrid API.
+      1. Resolve parcel boundary (user-drawn OR auto-fetched from ReportAll).
       2. Detect obstacles via LangSAM.
       3. Apply zoning setbacks + subtract obstacles.
       4. Return renderable GeoJSON layers + stats.
@@ -87,20 +73,46 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # -- Parse user-drawn boundary -------------------------------------------
-    logger.info("Parsing user-drawn property boundary...")
+    # -- Resolve parcel boundary ---------------------------------------------
     from shapely.geometry import shape
-    try:
-        # Convert Pydantic GeoJSONGeometry to a dict for Shapely
-        geojson_dict = {
-            "type": req.user_drawn_geojson.type,
-            "coordinates": req.user_drawn_geojson.coordinates
-        }
-        property_poly = shape(geojson_dict)
-    except Exception as e:
-        logger.error(f"Invalid GeoJSON: {e}")
-        raise HTTPException(status_code=400, detail="Invalid GeoJSON boundary provided.")
-        
+
+    parcel_source = "manual"
+    parcel_apn = None
+    parcel_address = None
+
+    if req.user_drawn_geojson:
+        # Mode 1: User drew a polygon manually
+        logger.info("Using user-drawn property boundary.")
+        try:
+            geojson_dict = {
+                "type": req.user_drawn_geojson.type,
+                "coordinates": req.user_drawn_geojson.coordinates,
+            }
+            property_poly = shape(geojson_dict)
+        except Exception as e:
+            logger.error(f"Invalid GeoJSON: {e}")
+            raise HTTPException(status_code=400, detail="Invalid GeoJSON boundary provided.")
+    elif req.lat is not None and req.lng is not None:
+        # Mode 2: Auto-fetch boundary from ReportAll
+        logger.info(f"Auto-fetching parcel from ReportAll: lat={req.lat}, lng={req.lng}")
+        from engine.parcel import fetch_parcel_by_coords
+
+        parcel_data = fetch_parcel_by_coords(req.lat, req.lng)
+        if parcel_data is None:
+            raise HTTPException(
+                status_code=404,
+                detail="No parcel found at the given coordinates. Try drawing a boundary manually.",
+            )
+        property_poly = parcel_data.polygon
+        parcel_source = "reportall"
+        parcel_apn = parcel_data.apn
+        parcel_address = parcel_data.address
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Either 'user_drawn_geojson' or both 'lat' and 'lng' must be provided.",
+        )
+
     if not property_poly.is_valid:
         property_poly = property_poly.buffer(0)
 
@@ -108,20 +120,9 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
     property_area_sqft = calculate_area_sqft(property_poly)
     property_ft = project_to_feet(property_poly)
 
-    # -- Detect obstacles via LangSAM ----------------------------------------
-    logger.info("Running LangSAM obstacle detection inside user boundary...")
-    try:
-        detector = get_detector()
-        detected_obstacles = detector.detect(property_poly, property_ft)
-        logger.info(f"Detected {len(detected_obstacles)} obstacles.")
-    except Exception as e:
-        logger.warning(f"Obstacle detection failed: {e}. Continuing without obstacles.")
-        detected_obstacles = []
-
-    obstacle_polygons_ft = [obs.polygon_ft for obs in detected_obstacles]
-
-    # -- Compute buildable zone ----------------------------------------------
+    # -- Compute buildable zone (Safe Zone) ----------------------------------
     setback = min(zoning.setback_side_ft, zoning.setback_rear_ft)
+    obstacle_polygons_ft = []
 
     buildable_zone = compute_buildable_zone(
         property_poly, setback, obstacle_polygons_ft
@@ -130,19 +131,7 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
         property_poly, setback, obstacle_polygons_ft
     )
 
-    # -- Build obstacle details for response ---------------------------------
     obstacle_details = []
-    for obs in detected_obstacles:
-        obs_geojson_raw = shapely_to_geojson(obs.polygon_wgs84)
-        obstacle_details.append(DetectedObstacle(
-            name=obs.name,
-            area_sqft=round(obs.polygon_ft.area, 1),
-            confidence=round(obs.confidence, 2),
-            geojson=GeoJSONGeometry(
-                type=obs_geojson_raw["type"],
-                coordinates=obs_geojson_raw["coordinates"],
-            ),
-        ))
 
     # -- Build response GeoJSON layers ---------------------------------------
     property_geojson_raw = shapely_to_geojson(property_poly)
@@ -167,6 +156,9 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
             buildable_area_sqft=round(buildable_area, 1),
             setback_ft=setback,
             max_adu_sqft=zoning.max_sqft_detached,
+            parcel_source=parcel_source,
+            apn=parcel_apn,
+            parcel_address=parcel_address,
         )
 
     effective_buildable = min(buildable_area, zoning.max_sqft_detached)
@@ -194,6 +186,9 @@ async def analyze_property(req: AnalyzeRequest) -> AnalyzeResponse:
         max_adu_sqft=zoning.max_sqft_detached,
         est_cost_low=est_cost_low,
         est_cost_high=est_cost_high,
+        parcel_source=parcel_source,
+        apn=parcel_apn,
+        parcel_address=parcel_address,
     )
 
 

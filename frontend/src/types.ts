@@ -9,7 +9,9 @@ export interface GeoJSONGeometry {
 }
 
 export interface AnalyzeRequest {
-    user_drawn_geojson: GeoJSONGeometry;
+    user_drawn_geojson?: GeoJSONGeometry;
+    lat?: number;
+    lng?: number;
     location: string;
 }
 
@@ -32,4 +34,7 @@ export interface AnalyzeResponse {
     max_adu_sqft: number;
     est_cost_low: number | null;
     est_cost_high: number | null;
+    parcel_source: string;
+    apn: string | null;
+    parcel_address: string | null;
 }

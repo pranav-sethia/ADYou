@@ -12,6 +12,8 @@
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@mapbox/search-js-core": "^1.5.1",
     "@mapbox/search-js-react": "^1.5.1",
+    "@turf/turf": "^7.3.4",
+    "@types/geojson": "^7946.0.16",
     "mapbox-gl": "^3.19.0",
     "next": "16.1.6",
     "react": "19.2.3",

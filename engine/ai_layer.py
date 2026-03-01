@@ -17,6 +17,10 @@ import cv2
 import numpy as np
 import requests
 import torch
+import urllib.parse
+import hmac
+import base64
+import hashlib
 from PIL import Image
 from shapely.geometry import Polygon, MultiPolygon
 from dotenv import load_dotenv
@@ -27,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN", "")
 EAGLEVIEW_API_KEY = os.getenv("EAGLEVIEW_API_KEY", "")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
+GOOGLE_MAPS_CLIENT_ID = os.getenv("GOOGLE_MAPS_CLIENT_ID", "")
+GOOGLE_MAPS_CLIENT_SECRET = os.getenv("GOOGLE_MAPS_CLIENT_SECRET", "")
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +73,10 @@ class ObstacleDetector(ABC):
 
 # Tile sizes differ by provider:
 #   Mapbox Static API uses 512px base tiles
+#   Google Maps Static API uses 512px (when scale=2)
 #   EagleView Tile API uses 256px base tiles (standard Slippy Map)
 MAPBOX_TILE_SIZE = 512
+GOOGLE_TILE_SIZE = 512
 EAGLEVIEW_TILE_SIZE = 256
 
 
@@ -115,13 +124,13 @@ def _fetch_eagleview_tiles(
     composite_h = grid_size * tile_size
     composite = Image.new("RGB", (composite_w, composite_h))
 
+    success_count = 0
+
     for dy in range(-half, half + 1):
         for dx in range(-half, half + 1):
             tx = center_tile_x + dx
             ty = center_tile_y + dy
             
-            # Using the production endpoint with Latest layer.
-            # WMTS generally uses standard slippy map endpoints for xyz tiles.
             url = (
                 f"https://apis.eagleview.com/imagery/wmts/v2/visual/tile/Latest/GoogleMapsCompatible/{zoom}/{ty}/{tx}.jpeg"
                 f"?apikey={EAGLEVIEW_API_KEY}"
@@ -130,6 +139,7 @@ def _fetch_eagleview_tiles(
                 resp = requests.get(url, timeout=15)
                 resp.raise_for_status()
                 tile_img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                success_count += 1
             except Exception as e:
                 logger.warning(f"EagleView tile fetch failed ({tx},{ty}): {e}")
                 tile_img = Image.new("RGB", (tile_size, tile_size), (0, 0, 0))
@@ -137,6 +147,9 @@ def _fetch_eagleview_tiles(
             paste_x = (dx + half) * tile_size
             paste_y = (dy + half) * tile_size
             composite.paste(tile_img, (paste_x, paste_y))
+
+    if success_count == 0:
+        raise RuntimeError("All EagleView tiles failed to load (likely an invalid API key or out of bounds).")
 
     # The center of the composite image corresponds to the center of the center tile,
     # not exactly the user's center point. Compute the actual geographic center
@@ -188,6 +201,58 @@ def _fetch_mapbox_static(
     return img, center_lng, center_lat, tile_size
 
 
+def _sign_google_url(input_url: str, secret: str) -> str:
+    """Sign a Google Maps URL using a client crypto secret."""
+    url = urllib.parse.urlparse(input_url)
+    url_to_sign = url.path + "?" + url.query
+    
+    # Base64 decode the secret. Add padding if necessary.
+    padded_secret = secret + "=" * ((4 - len(secret) % 4) % 4)
+    decoded_key = base64.urlsafe_b64decode(padded_secret)
+    
+    signature = hmac.new(decoded_key, url_to_sign.encode(), hashlib.sha1)
+    encoded_signature = base64.urlsafe_b64encode(signature.digest()).decode()
+    return input_url + "&signature=" + encoded_signature
+
+
+def _fetch_google_static(
+    center_lng: float,
+    center_lat: float,
+    zoom: float = 20.0,
+    width: int = 640,
+    height: int = 640,
+) -> tuple[Image.Image, float, float, int]:
+    """
+    Fetch a Google Maps static satellite image centered on a point.
+
+    Returns:
+        (image, center_lng, center_lat, tile_size_used)
+    """
+    tile_size = GOOGLE_TILE_SIZE
+    
+    # Scale=2 returns 1280x1280 resolution image but using 640x640 tile space mapping
+    base_url = "https://maps.googleapis.com/maps/api/staticmap"
+    query_params = f"center={center_lat},{center_lng}&zoom={zoom}&size={width}x{height}&maptype=satellite&scale=2"
+    
+    if GOOGLE_MAPS_CLIENT_ID and GOOGLE_MAPS_CLIENT_SECRET:
+        url = f"{base_url}?{query_params}&client={GOOGLE_MAPS_CLIENT_ID}"
+        url = _sign_google_url(url, GOOGLE_MAPS_CLIENT_SECRET)
+    elif GOOGLE_MAPS_API_KEY:
+        url = f"{base_url}?{query_params}&key={GOOGLE_MAPS_API_KEY}"
+    else:
+        raise ValueError("Google Maps requires either an API Key or Client ID/Secret.")
+
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+
+    logger.info(
+        f"Google Maps: fetched static image at zoom {zoom}, "
+        f"image_size={img.size}, center=({center_lng:.6f}, {center_lat:.6f})"
+    )
+    return img, center_lng, center_lat, tile_size
+
+
 def fetch_satellite_image(
     center_lng: float,
     center_lat: float,
@@ -195,18 +260,32 @@ def fetch_satellite_image(
     """
     Auto-select the best available imagery provider.
 
-    Priority: EagleView (higher resolution) > Mapbox (fallback).
+    Priority: EagleView > Google Maps > Mapbox.
 
     Returns:
         (image, actual_center_lng, actual_center_lat, tile_size, zoom)
     """
     if EAGLEVIEW_API_KEY:
-        logger.info("Using EagleView high-resolution imagery provider.")
-        zoom = 21  # EagleView supports high-res zoom levels
-        img, clng, clat, ts = _fetch_eagleview_tiles(
-            center_lng, center_lat, zoom=zoom, grid_size=5
-        )
-        return img, clng, clat, ts, float(zoom)
+        try:
+            logger.info("Using EagleView high-resolution imagery provider.")
+            zoom = 21  # EagleView supports high-res zoom levels
+            img, clng, clat, ts = _fetch_eagleview_tiles(
+                center_lng, center_lat, zoom=zoom, grid_size=5
+            )
+            return img, clng, clat, ts, float(zoom)
+        except Exception as e:
+            logger.warning(f"EagleView fetch failed completely: {e}. Falling back to next provider.")
+
+    if GOOGLE_MAPS_API_KEY or (GOOGLE_MAPS_CLIENT_ID and GOOGLE_MAPS_CLIENT_SECRET):
+        logger.info("Using Google Maps imagery provider.")
+        try:
+            zoom = 20.0  # Google Maps allows up to 20-21 often
+            img, clng, clat, ts = _fetch_google_static(
+                center_lng, center_lat, zoom=zoom
+            )
+            return img, clng, clat, ts, float(zoom)
+        except Exception as e:
+            logger.warning(f"Google Maps fetch failed completely: {e}. Falling back to next provider.")
 
     if MAPBOX_TOKEN:
         logger.info("Using Mapbox satellite imagery provider (fallback).")
@@ -214,7 +293,7 @@ def fetch_satellite_image(
         img, clng, clat, ts = _fetch_mapbox_static(
             center_lng, center_lat, zoom=zoom
         )
-        return img, clng, clat, ts, zoom
+        return img, clng, clat, ts, float(zoom)
 
     raise ValueError("No imagery API key found. Set EAGLEVIEW_API_KEY or MAPBOX_TOKEN in .env")
 
@@ -302,8 +381,8 @@ class LangSAMObstacleDetector(ObstacleDetector):
     """
 
     # Post-processing constants
-    MIN_AREA_SQFT = 25.0
-    MORPHOLOGICAL_CLOSE_FT = 3.0  # fuse fragments
+    MIN_AREA_SQFT = 30.0
+    MORPHOLOGICAL_CLOSE_FT = 5.0  # Increased to fuse fragmented main house roofs
     DILATION_FT = 3.0             # expand to fully encompass
 
     def __init__(self):
@@ -336,7 +415,7 @@ class LangSAMObstacleDetector(ObstacleDetector):
         2. Run LangSAM with text prompts.
         3. Post-process: filter, merge, close, dilate.
         """
-        from api.engine.geometry import project_to_feet
+        from engine.geometry import project_to_feet
         from shapely.ops import unary_union
 
         self._load_model()
@@ -360,9 +439,14 @@ class LangSAMObstacleDetector(ObstacleDetector):
         # Run LangSAM with expanded text prompts and per-label confidence thresholds
         prompts_config = [
             {
-                "text_prompt": "house . building . shed . detached garage . roof",
+                "text_prompt": "roof",
                 "label": "Structure",
-                "min_confidence": 0.30,
+                "min_confidence": 0.20,  # Lowered to ensure massive primary houses are caught
+            },
+            {
+                "text_prompt": "shed . detached garage . building",
+                "label": "Structure",
+                "min_confidence": 0.30,  # Kept higher for accessory structures
             },
             {
                 "text_prompt": "car . truck . vehicle",
@@ -443,8 +527,13 @@ class LangSAMObstacleDetector(ObstacleDetector):
                             raw_by_label[label] = []
                         raw_by_label[label].append((clipped, score))
 
+            except AssertionError:
+                # lang_sam (SAM2 backend) throws an empty AssertionError if GroundingDINO 
+                # finds 0 bounding boxes. This is expected behavior for "no objects found".
+                logger.debug(f"No '{label}' found by LangSAM (AssertionError).")
+                continue
             except Exception as e:
-                logger.warning(f"LangSAM detection failed for '{text_prompt}': {e}")
+                logger.warning(f"LangSAM detection failed unexpectedly for '{text_prompt}': {e}")
                 continue
 
         # --- Step 2: Post-process per label ---
@@ -493,7 +582,7 @@ class LangSAMObstacleDetector(ObstacleDetector):
                     continue
 
                 # Project back to WGS-84 for frontend rendering
-                from api.engine.geometry import project_to_wgs84
+                from engine.geometry import project_to_wgs84
                 poly_wgs84 = project_to_wgs84(poly_ft)
 
                 # Clip to parcel boundary (dilation may have expanded beyond)
