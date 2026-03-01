@@ -1,0 +1,223 @@
+/**
+ * Zoning and build method data for ADU Advisor (California cities).
+ */
+
+import type { ZoningCity, BuildMethodInfo } from "./types";
+
+export const ZONING_DB: Record<string, ZoningCity> = {
+  irvine: {
+    city: "Irvine",
+    state: "CA",
+    county: "Orange County",
+    max_adu_sqft: 1200,
+    min_lot_sqft: 4000,
+    setback_rear_ft: 5,
+    setback_side_ft: 4,
+    max_height_ft: 16,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 2,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "30–60",
+    permit_fee_range: "$3,000–$8,000",
+    impact_fees: "Waived for ADUs under 750 sqft (AB 68)",
+    key_laws: ["AB 68 (2020)", "SB 9 (2022)", "AB 2221 (2023)"],
+    notes:
+      "No owner-occupancy requirement as of 2020. Up to 2 ADUs permitted on single-family lots.",
+    rent_estimates: { studio: [1800, 2200], "1bed": [2200, 2800], "2bed": [2800, 3500] },
+    construction_cost_per_sqft: {
+      new: [350, 480],
+      conversion: [120, 200],
+      prefab: [200, 300],
+    },
+    planning_dept: "City of Irvine Community Development – (949) 724-6308",
+    coastal_zone: false,
+    hoa_note: "Many Irvine HOAs cannot legally block ADUs under state law (SB 9).",
+  },
+  "newport beach": {
+    city: "Newport Beach",
+    state: "CA",
+    county: "Orange County",
+    max_adu_sqft: 1000,
+    min_lot_sqft: 5000,
+    setback_rear_ft: 5,
+    setback_side_ft: 4,
+    max_height_ft: 14,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 1,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "45–90",
+    permit_fee_range: "$5,000–$12,000",
+    impact_fees: "Waived for units under 750 sqft. Larger units may face school/park fees.",
+    key_laws: ["AB 68 (2020)", "Coastal Act (for coastal zone parcels)"],
+    notes:
+      "Coastal Commission approval may be required for parcels in the Coastal Zone. Verify zoning before proceeding.",
+    rent_estimates: { studio: [2000, 2600], "1bed": [2500, 3200], "2bed": [3200, 4200] },
+    construction_cost_per_sqft: {
+      new: [380, 520],
+      conversion: [140, 220],
+      prefab: [220, 320],
+    },
+    planning_dept: "Newport Beach Community Development – (949) 644-3200",
+    coastal_zone: true,
+    hoa_note: "HOAs cannot prohibit ADUs but may regulate aesthetics/materials under AB 3182.",
+  },
+  "los angeles": {
+    city: "Los Angeles",
+    state: "CA",
+    county: "Los Angeles County",
+    max_adu_sqft: 1200,
+    min_lot_sqft: 5000,
+    setback_rear_ft: 5,
+    setback_side_ft: 4,
+    max_height_ft: 18,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 2,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "30–90",
+    permit_fee_range: "$4,000–$10,000",
+    impact_fees: "AB 68 exemptions apply for units under 750 sqft.",
+    key_laws: ["AB 68", "SB 9", "LA ADU Ordinance (2022)"],
+    notes:
+      "LA's ADU-by-right program streamlines approvals. No discretionary review for standard ADUs.",
+    rent_estimates: { studio: [1600, 2100], "1bed": [2000, 2800], "2bed": [2700, 3600] },
+    construction_cost_per_sqft: {
+      new: [320, 460],
+      conversion: [110, 190],
+      prefab: [190, 280],
+    },
+    planning_dept: "LA Dept of Building & Safety – (213) 482-0000",
+    coastal_zone: false,
+    hoa_note: "HOAs cannot legally block ADUs in California under AB 3182.",
+  },
+  "san diego": {
+    city: "San Diego",
+    state: "CA",
+    county: "San Diego County",
+    max_adu_sqft: 1200,
+    min_lot_sqft: 5000,
+    setback_rear_ft: 4,
+    setback_side_ft: 4,
+    max_height_ft: 16,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 2,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "30–60",
+    permit_fee_range: "$2,000–$7,000",
+    impact_fees:
+      "Waived under 750 sqft. San Diego also has reduced fees for workforce housing ADUs.",
+    key_laws: ["AB 68", "SB 9", "San Diego ADU Regulations (2021)"],
+    notes: "San Diego has one of California's most streamlined ADU approval processes.",
+    rent_estimates: { studio: [1700, 2200], "1bed": [2100, 2700], "2bed": [2700, 3500] },
+    construction_cost_per_sqft: {
+      new: [330, 460],
+      conversion: [120, 195],
+      prefab: [195, 285],
+    },
+    planning_dept: "San Diego Development Services – (619) 446-5000",
+    coastal_zone: true,
+    hoa_note: "HOAs cannot legally block ADUs under AB 3182.",
+  },
+  "san jose": {
+    city: "San Jose",
+    state: "CA",
+    county: "Santa Clara County",
+    max_adu_sqft: 1200,
+    min_lot_sqft: 5000,
+    setback_rear_ft: 5,
+    setback_side_ft: 5,
+    max_height_ft: 16,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 2,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "30–60",
+    permit_fee_range: "$5,000–$15,000",
+    impact_fees: "School fees may apply (~$4/sqft). Impact fees waived under 750 sqft.",
+    key_laws: ["AB 68", "SB 9", "San Jose ADU Ordinance"],
+    notes:
+      "Higher construction costs due to Bay Area labor market. Strong rental demand from tech workers.",
+    rent_estimates: { studio: [2200, 2900], "1bed": [2800, 3600], "2bed": [3500, 4800] },
+    construction_cost_per_sqft: {
+      new: [420, 580],
+      conversion: [160, 240],
+      prefab: [240, 360],
+    },
+    planning_dept: "San Jose Planning, Building & Code Enforcement – (408) 535-3555",
+    coastal_zone: false,
+    hoa_note: "HOAs cannot block ADUs under state law.",
+  },
+  sacramento: {
+    city: "Sacramento",
+    state: "CA",
+    county: "Sacramento County",
+    max_adu_sqft: 1200,
+    min_lot_sqft: 6000,
+    setback_rear_ft: 5,
+    setback_side_ft: 4,
+    max_height_ft: 16,
+    owner_occupancy_required: false,
+    max_adus_per_lot: 2,
+    junior_adu_allowed: true,
+    garage_conversion_allowed: true,
+    permit_timeline_days: "30–60",
+    permit_fee_range: "$2,000–$6,000",
+    impact_fees: "Generally waived for ADUs under 750 sqft.",
+    key_laws: ["AB 68", "SB 9", "Sacramento ADU Program"],
+    notes:
+      "Sacramento offers a pre-approved ADU plan program that cuts costs and timeline significantly.",
+    rent_estimates: { studio: [1200, 1600], "1bed": [1500, 2000], "2bed": [2000, 2700] },
+    construction_cost_per_sqft: {
+      new: [280, 400],
+      conversion: [100, 170],
+      prefab: [170, 250],
+    },
+    planning_dept: "Sacramento Community Development – (916) 808-5011",
+    coastal_zone: false,
+    hoa_note: "HOAs cannot legally prohibit ADUs in California.",
+  },
+};
+
+export const BUILD_METHODS: Record<string, BuildMethodInfo> = {
+  "New Construction (Detached)": {
+    key: "new",
+    multiplier: 1.0,
+    description: "Built from scratch in backyard",
+  },
+  "Garage Conversion": {
+    key: "conversion",
+    multiplier: 0.55,
+    description: "Convert existing garage to living space",
+  },
+  "Basement Conversion": {
+    key: "conversion",
+    multiplier: 0.6,
+    description: "Convert basement to ADU",
+  },
+  "Attached Addition": {
+    key: "new",
+    multiplier: 0.85,
+    description: "Addition attached to main house",
+  },
+  "Prefab / Modular": {
+    key: "prefab",
+    multiplier: 0.9,
+    description: "Factory-built unit placed on-site",
+  },
+  "Junior ADU (JADU)": {
+    key: "conversion",
+    multiplier: 0.4,
+    description: "Convert room within main house, up to 500 sqft",
+  },
+};
+
+export function getZoningCityKeys(): string[] {
+  return Object.keys(ZONING_DB);
+}
+
+export function getZoningByKey(key: string): ZoningCity | null {
+  return ZONING_DB[key] ?? null;
+}

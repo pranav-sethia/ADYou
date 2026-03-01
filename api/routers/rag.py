@@ -1,8 +1,5 @@
 """
-Standalone RAG server for ADU Handbook.
-
-Run from repo root:
-  uvicorn rag_adu.server:app --port 8001
+API Router for ADU RAG functionality.
 """
 from __future__ import annotations
 
@@ -11,36 +8,24 @@ import math
 import os
 from pathlib import Path
 
-# Load .env from repo root so GROQ_API_KEY / GOOGLE_API_KEY are available
-try:
-    from dotenv import load_dotenv
-    repo_root = Path(__file__).resolve().parent.parent
-    # override=True ensures file values replace blank shell vars.
-    load_dotenv(repo_root / ".env", override=True)
-    # Optional fallback if user accidentally placed key in frontend env.
-    load_dotenv(repo_root / "frontend" / ".env.local", override=True)
-except ImportError:
-    pass
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from agents import Agent, Runner, set_tracing_disabled
+from agents.extensions.models.litellm_model import LitellmModel
+
+set_tracing_disabled(True)
+
+# Initialize the router
+router = APIRouter()
 
 # Paths / constants
-RAG_DIR = Path(__file__).resolve().parent
+repo_root = Path(__file__).resolve().parent.parent.parent
+RAG_DIR = repo_root / "api"
 DATA_DIR = RAG_DIR / "data"
 INDEX_PATH = DATA_DIR / "adu_index.json"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 6
-
-app = FastAPI(title="ADU RAG API", version="1.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Lazy-loaded globals
 _embedding_model = None
@@ -54,7 +39,6 @@ def get_secret(name: str) -> str | None:
         return value.strip()
 
     # Fallback parse in case env loading is blocked by shell state.
-    repo_root = Path(__file__).resolve().parent.parent
     for candidate in (repo_root / ".env", repo_root / "frontend" / ".env.local"):
         if not candidate.exists():
             continue
@@ -72,14 +56,12 @@ def get_secret(name: str) -> str | None:
 
 
 def env_diagnostics() -> dict:
-    repo_root = Path(__file__).resolve().parent.parent
     root_env = repo_root / ".env"
     fe_env = repo_root / "frontend" / ".env.local"
     return {
         "root_env_exists": root_env.exists(),
         "frontend_env_exists": fe_env.exists(),
-        "root_env_has_groq": bool(get_secret("GROQ_API_KEY")),
-        "root_env_has_google": bool(get_secret("GOOGLE_API_KEY")),
+        "root_env_has_gemini": bool(get_secret("GEMINI_API_KEY")),
     }
 
 
@@ -89,7 +71,7 @@ def get_index_entries() -> list[dict]:
         if not INDEX_PATH.exists():
             raise HTTPException(
                 status_code=503,
-                detail="RAG index not found. Run: python rag_adu/ingest.py",
+                detail="RAG index not found. Run: python api/scripts/ingest.py",
             )
         try:
             payload = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
@@ -143,6 +125,12 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[HistoryMessage] | None = None
+    address: str | None = None
+    adu_sqft: float | None = None
+    adu_type: str | None = None
+    primary_use: str | None = None
+    blocker_types: list[str] = Field(default_factory=list)
+    has_existing_structure: bool | None = None
 
 
 class ChatResponse(BaseModel):
@@ -153,57 +141,8 @@ class ChatResponse(BaseModel):
 MAX_HISTORY_TURNS = 10
 
 
-def call_groq(messages: list[dict]) -> str:
-    import groq
-    api_key = get_secret("GROQ_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GROQ_API_KEY not set. Add it to .env",
-        )
-    model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
-    client = groq.Groq(api_key=api_key)
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=1024,
-        )
-        return resp.choices[0].message.content or ""
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Groq request failed: {exc}") from exc
-
-
-def call_gemini(messages: list[dict]) -> str:
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Generative AI not installed. pip install google-generativeai",
-        )
-    api_key = get_secret("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GOOGLE_API_KEY not set. Add it to .env",
-        )
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    # Gemini doesn't support chat-style message arrays natively in the
-    # simple generate_content API, so we flatten the conversation into a
-    # single prompt while preserving the turn structure.
-    parts: list[str] = []
-    for msg in messages:
-        role_label = msg["role"].upper()
-        parts.append(f"[{role_label}]\n{msg['content']}")
-    full_prompt = "\n\n".join(parts)
-    resp = model.generate_content(full_prompt)
-    return resp.text or ""
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+@router.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest) -> ChatResponse:
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
     query = req.message.strip()
@@ -225,53 +164,55 @@ def chat(req: ChatRequest) -> ChatResponse:
         "You are an ADU advisor. Answer only using the following context from the "
         "California HCD ADU Handbook. If the answer is not in the context, say so clearly. "
         "Keep answers concise and cite page numbers when relevant.\n\n"
-        f"Context from the handbook:\n\n{context}"
     )
+    
+    # Inject frontend map context if available
+    if any([req.address, req.adu_sqft, req.adu_type, req.primary_use]):
+        system += "**User Property Context (Already Known):**\n"
+        if req.address: system += f"- Address: {req.address}\n"
+        if req.adu_sqft: system += f"- Planned ADU Size: {req.adu_sqft} sq ft\n"
+        if req.adu_type: system += f"- ADU Type: {req.adu_type.replace('_', ' ').title()}\n"
+        if req.primary_use: system += f"- Primary Use: {req.primary_use}\n"
+        if req.blocker_types: system += f"- Property Blockers: {', '.join(req.blocker_types)}\n"
+        system += "\nNote: Do not ask the user for this information if it is already provided above.\n\n"
 
-    # Build the full message array with conversation history
-    messages: list[dict] = [{"role": "system", "content": system}]
+    system += f"**Context from the handbook:**\n\n{context}"
 
+    history_text = ""
     if req.history:
         for turn in req.history[-MAX_HISTORY_TURNS * 2:]:
             if turn.role in ("user", "assistant"):
-                messages.append({"role": turn.role, "content": turn.content})
+                role = "User" if turn.role == "user" else "Assistant"
+                history_text += f"{role}: {turn.content}\n\n"
 
-    messages.append({"role": "user", "content": query})
+    instructions = system
+    if history_text:
+        instructions += f"\n\n---\n**Conversation so far:**\n{history_text}"
 
-    # Prefer Groq, fallback to Gemini
-    if get_secret("GROQ_API_KEY"):
-        answer = call_groq(messages)
-    elif get_secret("GOOGLE_API_KEY"):
-        answer = call_gemini(messages)
-    else:
+    api_key = get_secret("GEMINI_API_KEY")
+    if not api_key:
         diag = env_diagnostics()
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Set GROQ_API_KEY or GOOGLE_API_KEY. "
-                f"Diagnostics: {diag}"
-            ),
+            detail=f"GEMINI_API_KEY not set. Add it to .env. Diagnostics: {diag}",
         )
 
-    return ChatResponse(answer=answer.strip(), sources=sources)
+    agent = Agent(
+        name="ADU Advisor",
+        instructions=instructions,
+        model=LitellmModel(model="gemini/gemini-2.5-flash", api_key=api_key),
+    )
+
+    try:
+        result = await Runner.run(agent, input=query)
+        answer = result.final_output.strip()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Agent request failed: {exc}") from exc
+
+    return ChatResponse(answer=answer, sources=sources)
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "ADU RAG API",
-        "docs": "POST /chat with {\"message\": \"your question\"}. GET /health for health check.",
-        "chat": "/chat",
-        "health": "/health",
-    }
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.get("/debug/config")
+@router.get("/debug/config")
 def debug_config():
     # No secrets are returned; only booleans.
     return env_diagnostics()

@@ -1,21 +1,22 @@
 "use client";
 
 import { Fragment, useState, useRef, useEffect, useCallback, type FormEvent } from "react";
-import { Zap, PanelLeftClose, PanelLeft, BookOpen } from "lucide-react";
+import { Zap, PanelLeftClose, PanelLeft, BookOpen, ArrowLeft } from "lucide-react";
 import { ChatMessage } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
 import { TypingIndicator } from "@/components/typing-indicator";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { FeasibilitySidebar } from "@/components/feasibility-sidebar";
 import { ChipGroup, OnboardingQ2 } from "@/components/answer-chips";
-import type { UserProfile } from "@/types";
+import type { UserProfile, PropertyContext } from "@/types";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
 /* ------------------------------------------------------------------ */
 
-const RAG_API_URL = process.env.NEXT_PUBLIC_RAG_API_URL ?? "http://localhost:8001";
+const RAG_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const STORAGE_KEY = "adu-advisor-profile";
+const MESSAGES_KEY = "adu-advisor-messages";
 
 const DEFAULT_PROFILE: UserProfile = {
   aduType: null,
@@ -79,7 +80,7 @@ const PRIMARY_USE_TEXT: Record<string, string> = {
   personal: "personal use or a home office",
 };
 
-function buildSummaryPrompt(profile: UserProfile): string {
+function buildSummaryPrompt(profile: UserProfile, ctx?: PropertyContext): string {
   const typeText = ADU_TYPE_TEXT[profile.aduType ?? "unsure"] ?? "an ADU";
   const useText = PRIMARY_USE_TEXT[profile.primaryUse ?? "personal"] ?? "general use";
   const blockerText =
@@ -98,11 +99,26 @@ function buildSummaryPrompt(profile: UserProfile): string {
     `Primary use: ${useText}.`,
     blockerText,
     structureText,
+  ];
+
+  if (ctx) {
+    parts.push("");
+    parts.push("Property analysis data from the map:");
+    if (ctx.address) parts.push(`- Address: ${ctx.address}`);
+    if (ctx.propertyArea) parts.push(`- Property area: ${ctx.propertyArea.toLocaleString()} sq ft`);
+    if (ctx.buildableArea) parts.push(`- Buildable area (after setbacks): ${ctx.buildableArea.toLocaleString()} sq ft`);
+    if (ctx.setback) parts.push(`- Required setback: ${ctx.setback} ft`);
+    if (ctx.aduSize) parts.push(`- Planned ADU size: ${ctx.aduSize} sq ft`);
+    if (ctx.aduShape) parts.push(`- ADU shape: ${ctx.aduShape.replace("_", " ")}`);
+    if (ctx.maxAduSqft) parts.push(`- Maximum allowed ADU: ${ctx.maxAduSqft} sq ft`);
+  }
+
+  parts.push(
     "",
     "Respond in 3-4 conversational sentences:",
     "- Confirm the key rules that apply to their specific situation",
     "- Flag the single most important thing they need to know",
-  ];
+  );
 
   if (profile.hasExistingStructure && profile.aduType !== "garage_conversion") {
     parts.push("- Mention the garage conversion pathway as a potentially faster/cheaper option");
@@ -144,7 +160,11 @@ interface ChatResponse {
 /*  Main component                                                    */
 /* ------------------------------------------------------------------ */
 
-export function RAGChat() {
+interface RAGChatProps {
+  propertyContext?: PropertyContext;
+}
+
+export function RAGChat({ propertyContext }: RAGChatProps) {
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -158,26 +178,41 @@ export function RAGChat() {
   messagesRef.current = messages;
   const profileRef = useRef(userProfile);
   profileRef.current = userProfile;
+  const propertyContextRef = useRef(propertyContext);
+  propertyContextRef.current = propertyContext;
 
-  /* ---- Initialize from sessionStorage ---- */
+  /* ---- Initialize from sessionStorage or property context ---- */
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const profile: UserProfile = JSON.parse(saved);
-        if (profile.onboardingComplete) {
-          setUserProfile(profile);
-          setInitialized(true);
-          return;
+    if (!propertyContext) {
+      try {
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const profile: UserProfile = JSON.parse(saved);
+          if (profile.onboardingComplete) {
+            setUserProfile(profile);
+            setInitialized(true);
+            return;
+          }
         }
-      }
-    } catch { /* start fresh */ }
+      } catch { /* start fresh */ }
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+
+    const greeting = propertyContext
+      ? (() => {
+        const addr = propertyContext.address ?? "your property";
+        const size = propertyContext.aduSize ? `${propertyContext.aduSize} sqft` : "";
+        const shape = propertyContext.aduShape ? ` ${propertyContext.aduShape.replace("_", " ")}` : "";
+        return `I see you've analyzed **${addr}** on the map and designed a ${size}${shape} ADU — great start!\n\nI have 3 quick questions to personalize your requirements checklist and tips — takes about 30 seconds.\n\nWhat type of ADU are you looking to build?`;
+      })()
+      : GREETING;
 
     setMessages([
-      { id: generateId(), role: "assistant", content: GREETING, onboardingStep: 0 },
+      { id: generateId(), role: "assistant", content: greeting, onboardingStep: 0 },
     ]);
     setInitialized(true);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- Save profile on completion ---- */
   useEffect(() => {
@@ -266,7 +301,7 @@ export function RAGChat() {
       role: m.role,
       content: m.content,
     }));
-    const prompt = buildSummaryPrompt(updatedProfile);
+    const prompt = buildSummaryPrompt(updatedProfile, propertyContextRef.current);
 
     try {
       const res = await fetch(`${RAG_API_URL}/chat`, {
@@ -348,6 +383,18 @@ export function RAGChat() {
     [sendMessage]
   );
 
+  const handleFinishChat = useCallback(() => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(profileRef.current));
+    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(messagesRef.current));
+
+    const inIframe = window.self !== window.top;
+    if (inIframe) {
+      window.parent.postMessage({ type: "adu-chat-finish" }, "*");
+    } else {
+      window.location.href = "/";
+    }
+  }, []);
+
   /* ---------------------------------------------------------------- */
   /*  Onboarding chip renderer                                        */
   /* ---------------------------------------------------------------- */
@@ -421,9 +468,8 @@ export function RAGChat() {
     <div className="relative flex h-screen">
       {/* Sidebar */}
       <div
-        className={`shrink-0 border-r border-border/60 bg-card/40 backdrop-blur-sm transition-all duration-300 ease-in-out overflow-hidden ${
-          sidebarOpen ? "w-[320px]" : "w-0"
-        }`}
+        className={`shrink-0 border-r border-border/60 bg-card/40 backdrop-blur-sm transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? "w-[320px]" : "w-0"
+          }`}
       >
         <div className="w-[320px] h-full">
           <FeasibilitySidebar userProfile={userProfile} />
@@ -453,12 +499,23 @@ export function RAGChat() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/60 backdrop-blur border border-border/60">
-            <div className="relative flex items-center justify-center w-2 h-2">
-              <div className="absolute w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-60" />
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/60 backdrop-blur border border-border/60">
+              <div className="relative flex items-center justify-center w-2 h-2">
+                <div className="absolute w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-60" />
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              </div>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Online</span>
             </div>
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Online</span>
+            <button
+              onClick={handleFinishChat}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/60 backdrop-blur border border-border/60 hover:border-primary/30 hover:bg-primary/10 transition-all duration-200 cursor-pointer group"
+            >
+              <ArrowLeft className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-[10px] font-medium text-muted-foreground group-hover:text-primary transition-colors whitespace-nowrap">
+                Finish &amp; Return Home
+              </span>
+            </button>
           </div>
         </header>
 

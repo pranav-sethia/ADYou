@@ -7,6 +7,7 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Map, { Source, Layer, NavigationControl } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import * as turf from "@turf/turf";
@@ -38,6 +39,7 @@ interface MapInterfaceProps {
 }
 
 export default function MapInterface({ initialLocation }: MapInterfaceProps) {
+    const router = useRouter();
     const mapRef = useRef<MapRef | null>(null);
 
     // Location state (set by address search or initial prop)
@@ -580,9 +582,30 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                 <div className="absolute bottom-10 right-10 w-80 bg-white shadow-xl ring-1 ring-slate-900/5 rounded-xl p-5 text-slate-800 pointer-events-auto z-10 animate-in fade-in slide-in-from-bottom-5">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-extrabold tracking-normal text-slate-800 leading-tight">ADU Designer</h2>
-                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-rose-100 text-rose-600 border border-rose-200'}`}>
+                        <button
+                            disabled={!isAduValid}
+                            onClick={() => {
+                                const params = new URLSearchParams({
+                                    fromMap: "1",
+                                    aduSize: String(aduSize),
+                                    aduShape: aduShapeType,
+                                    setback: String(result?.setback_ft ?? 4),
+                                    propertyArea: String(result?.property_area_sqft ?? 0),
+                                    buildableArea: String(result?.buildable_area_sqft ?? 0),
+                                    maxAduSqft: String(result?.max_adu_sqft ?? 1200),
+                                });
+                                if (selectedLocation) {
+                                    params.set("address", selectedLocation.name);
+                                    params.set("lat", String(selectedLocation.lat));
+                                    params.set("lng", String(selectedLocation.lng));
+                                }
+                                if (result?.apn) params.set("apn", result.apn);
+                                router.push(`/adu-chat?${params}`);
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200 hover:bg-emerald-200 cursor-pointer' : 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'}`}
+                        >
                             {isAduValid ? '✓ Plan ADU' : '⨯ Invalid'}
-                        </div>
+                        </button>
                     </div>
 
                     <div className="space-y-4">

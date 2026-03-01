@@ -23,6 +23,19 @@ export interface UserProfile {
   onboardingStep: number;
 }
 
+export interface PropertyContext {
+  address?: string;
+  lat?: number;
+  lng?: number;
+  aduSize?: number;
+  aduShape?: string;
+  setback?: number;
+  propertyArea?: number;
+  buildableArea?: number;
+  maxAduSqft?: number;
+  apn?: string;
+}
+
 export interface GeoJSONGeometry {
     type: "Polygon" | "MultiPolygon";
     coordinates: number[][][] | number[][][][];

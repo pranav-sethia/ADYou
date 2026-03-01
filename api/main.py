@@ -50,6 +50,13 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+from api.routers import rag
+from financial_chatbot.router import router as financial_router
+from api.routers.orchestrator import router as orchestrator_router
+
+app.include_router(rag.router)
+app.include_router(financial_router)
+app.include_router(orchestrator_router)
 
 # Cost estimates
 _COST_PER_SQFT_LOW = 200.0

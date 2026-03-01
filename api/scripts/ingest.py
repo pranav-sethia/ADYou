@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 
-RAG_DIR = Path(__file__).resolve().parent
+RAG_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = RAG_DIR / "data"
 PDF_PATH = DATA_DIR / "adu-handbook-update.pdf"
 INDEX_PATH = DATA_DIR / "adu_index.json"

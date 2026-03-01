@@ -1,6 +1,13 @@
 {
     "compilerOptions": {
         "target": "es5",
+        "types": [
+            "node",
+            "react",
+            "react-dom",
+            "geojson",
+            "@mapbox/mapbox-gl-draw"
+        ],
         "lib": [
             "dom",
             "dom.iterable",

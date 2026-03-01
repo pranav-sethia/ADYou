@@ -2,9 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
-import { FeasibilityForm } from '@/components/feasibility/FeasibilityForm'
+
+const FeasibilityForm = dynamic(
+    () => import('@/components/feasibility/FeasibilityForm').then(mod => mod.FeasibilityForm),
+    { ssr: false }
+)
 import { FeasibilityReport } from '@/components/feasibility/FeasibilityReport'
 import { MOCK_FEASIBILITY_REPORT } from '@/lib/mock/feasibility'
 
