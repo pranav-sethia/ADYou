@@ -20,7 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import type { UserProfile } from "@/types";
+import type { UserProfile, PropertyContext } from "@/types";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -47,36 +47,43 @@ interface Tip {
 /*  Static requirement items (always present)                         */
 /* ------------------------------------------------------------------ */
 
-const BASE_ITEMS: FeasibilityItem[] = [
-  {
-    id: "zoning",
-    icon: <MapPin className="w-4 h-4" />,
-    title: "Zoning & Setbacks",
-    description: "Verified rear and side setback requirements for Irvine, CA.",
-    status: "pass",
-  },
-  {
-    id: "size",
-    icon: <Maximize2 className="w-4 h-4" />,
-    title: "Size Limits (800 sqft)",
-    description: "Unit falls within the 1,200 sqft maximum for detached ADUs.",
-    status: "pass",
-  },
-  {
-    id: "fire",
-    icon: <Flame className="w-4 h-4" />,
-    title: "Fire Hazard Compliance",
-    description: "Property is not within a Very High Fire Hazard Severity Zone.",
-    status: "unknown",
-  },
-  {
-    id: "permit",
-    icon: <FileCheck className="w-4 h-4" />,
-    title: "Permitting Process",
-    description: "Ministerial approval \u2014 no discretionary review required.",
-    status: "unknown",
-  },
-];
+function getBaseItems(ctx?: PropertyContext): FeasibilityItem[] {
+  const address = ctx?.address || "Irvine, CA";
+  const size = ctx?.aduSize || 800;
+  const max = ctx?.maxAduSqft || 1200;
+  const setback = ctx?.setback !== undefined ? ctx.setback : 4;
+
+  return [
+    {
+      id: "zoning",
+      icon: <MapPin className="w-4 h-4" />,
+      title: "Zoning & Setbacks",
+      description: `Verified rear and side setback requirements (${setback}ft) for ${address}.`,
+      status: "pass",
+    },
+    {
+      id: "size",
+      icon: <Maximize2 className="w-4 h-4" />,
+      title: `Size Limits (${size} sqft)`,
+      description: `Unit falls within the ${max.toLocaleString()} sqft maximum for detached ADUs.`,
+      status: "pass",
+    },
+    {
+      id: "fire",
+      icon: <Flame className="w-4 h-4" />,
+      title: "Fire Hazard Compliance",
+      description: "Property is not within a Very High Fire Hazard Severity Zone.",
+      status: "unknown",
+    },
+    {
+      id: "permit",
+      icon: <FileCheck className="w-4 h-4" />,
+      title: "Permitting Process",
+      description: "Ministerial approval \u2014 no discretionary review required.",
+      status: "unknown",
+    },
+  ];
+}
 
 /* ------------------------------------------------------------------ */
 /*  Conditional items (added after onboarding)                        */
@@ -225,9 +232,10 @@ function statusIconClass(status: ItemStatus): string {
 
 interface Props {
   userProfile: UserProfile;
+  propertyContext?: PropertyContext;
 }
 
-export function FeasibilitySidebar({ userProfile }: Props) {
+export function FeasibilitySidebar({ userProfile, propertyContext }: Props) {
   const [activeTab, setActiveTab] = useState<"requirements" | "tips">("requirements");
   const [tipsBadge, setTipsBadge] = useState(false);
   const prevComplete = useRef(false);
@@ -242,7 +250,8 @@ export function FeasibilitySidebar({ userProfile }: Props) {
   const conditionalItems = userProfile.onboardingComplete
     ? getConditionalItems(userProfile)
     : [];
-  const allItems = [...BASE_ITEMS, ...conditionalItems];
+  const baseItems = getBaseItems(propertyContext);
+  const allItems = [...baseItems, ...conditionalItems];
   const passCount = allItems.filter((i) => i.status === "pass").length;
   const tips = userProfile.onboardingComplete ? getTips(userProfile) : [];
 
@@ -254,9 +263,9 @@ export function FeasibilitySidebar({ userProfile }: Props) {
           Project Feasibility
         </h2>
         <div className="flex items-center gap-2 mt-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--neon-cyan)]" />
-          <span className="text-xs text-muted-foreground">
-            Irvine, CA &middot; 1 Bed / 1 Bath
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
+          <span className="text-xs text-muted-foreground truncate" title={propertyContext?.address || "Irvine, CA"}>
+            {propertyContext?.address || "Irvine, CA"}
           </span>
         </div>
       </div>
@@ -265,11 +274,10 @@ export function FeasibilitySidebar({ userProfile }: Props) {
       <div className="mx-5 flex gap-1 p-1 rounded-lg bg-secondary/40">
         <button
           onClick={() => setActiveTab("requirements")}
-          className={`flex-1 text-[12px] font-medium py-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-            activeTab === "requirements"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          className={`flex-1 text-[12px] font-medium py-1.5 rounded-md transition-all duration-200 cursor-pointer ${activeTab === "requirements"
+            ? "bg-card text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+            }`}
         >
           Requirements
         </button>
@@ -278,11 +286,10 @@ export function FeasibilitySidebar({ userProfile }: Props) {
             setActiveTab("tips");
             setTipsBadge(false);
           }}
-          className={`relative flex-1 text-[12px] font-medium py-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-            activeTab === "tips"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          className={`relative flex-1 text-[12px] font-medium py-1.5 rounded-md transition-all duration-200 cursor-pointer ${activeTab === "tips"
+            ? "bg-card text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+            }`}
         >
           Tips
           {tipsBadge && activeTab !== "tips" && (

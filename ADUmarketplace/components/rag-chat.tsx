@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useRef, useEffect, useCallback, type FormEvent } from "react";
-import { Zap, PanelLeftClose, PanelLeft, BookOpen, ArrowLeft } from "lucide-react";
+import { Zap, PanelLeftClose, PanelLeft, BookOpen } from "lucide-react";
 import { ChatMessage } from "@/components/chat-message";
 import { ChatInput } from "@/components/chat-input";
 import { TypingIndicator } from "@/components/typing-indicator";
@@ -154,6 +154,8 @@ interface Message {
 interface ChatResponse {
   answer: string;
   sources: Source[];
+  generate_report?: boolean;
+  report_params?: any;
 }
 
 /* ------------------------------------------------------------------ */
@@ -344,11 +346,34 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
 
       const history = previousMessages.map((m) => ({ role: m.role, content: m.content }));
 
+      // If onboarding is not complete (e.g., this is the very first summary payload), 
+      // we still use the legacy `/chat` endpoint for the initial summary.
+      // Otherwise, we invoke the Orchestrator with the context payload.
+      const endpoint = userProfile.onboardingComplete
+        ? `${RAG_API_URL}/agent/orchestrate`
+        : `${RAG_API_URL}/chat`;
+
+      const payload = userProfile.onboardingComplete
+        ? {
+          message: trimmed,
+          history: history,
+          address: propertyContextRef.current?.address ?? null,
+          adu_sqft: propertyContextRef.current?.aduSize ?? null,
+          adu_type: profileRef.current.aduType ?? null,
+          primary_use: profileRef.current.primaryUse ?? null,
+          blocker_types: profileRef.current.blockerTypes ?? [],
+          has_existing_structure: profileRef.current.hasExistingStructure ?? null,
+        }
+        : {
+          message: trimmed,
+          history: history,
+        };
+
       try {
-        const res = await fetch(`${RAG_API_URL}/chat`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmed, history }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const e = await res.json().catch(() => ({ detail: res.statusText }));
@@ -383,17 +408,7 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
     [sendMessage]
   );
 
-  const handleFinishChat = useCallback(() => {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(profileRef.current));
-    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(messagesRef.current));
 
-    const inIframe = window.self !== window.top;
-    if (inIframe) {
-      window.parent.postMessage({ type: "adu-chat-finish" }, "*");
-    } else {
-      window.location.href = "/";
-    }
-  }, []);
 
   /* ---------------------------------------------------------------- */
   /*  Onboarding chip renderer                                        */
@@ -472,7 +487,7 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
           }`}
       >
         <div className="w-[320px] h-full">
-          <FeasibilitySidebar userProfile={userProfile} />
+          <FeasibilitySidebar userProfile={userProfile} propertyContext={propertyContext} />
         </div>
       </div>
 
@@ -500,22 +515,6 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/60 backdrop-blur border border-border/60">
-              <div className="relative flex items-center justify-center w-2 h-2">
-                <div className="absolute w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-60" />
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              </div>
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Online</span>
-            </div>
-            <button
-              onClick={handleFinishChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/60 backdrop-blur border border-border/60 hover:border-primary/30 hover:bg-primary/10 transition-all duration-200 cursor-pointer group"
-            >
-              <ArrowLeft className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="text-[10px] font-medium text-muted-foreground group-hover:text-primary transition-colors whitespace-nowrap">
-                Finish &amp; Return Home
-              </span>
-            </button>
           </div>
         </header>
 

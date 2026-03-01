@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agents import Agent, Runner, set_tracing_disabled
 from agents.extensions.models.litellm_model import LitellmModel
@@ -125,6 +125,12 @@ class HistoryMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[HistoryMessage] | None = None
+    address: str | None = None
+    adu_sqft: float | None = None
+    adu_type: str | None = None
+    primary_use: str | None = None
+    blocker_types: list[str] = Field(default_factory=list)
+    has_existing_structure: bool | None = None
 
 
 class ChatResponse(BaseModel):
@@ -158,8 +164,19 @@ async def chat(req: ChatRequest) -> ChatResponse:
         "You are an ADU advisor. Answer only using the following context from the "
         "California HCD ADU Handbook. If the answer is not in the context, say so clearly. "
         "Keep answers concise and cite page numbers when relevant.\n\n"
-        f"Context from the handbook:\n\n{context}"
     )
+    
+    # Inject frontend map context if available
+    if any([req.address, req.adu_sqft, req.adu_type, req.primary_use]):
+        system += "**User Property Context (Already Known):**\n"
+        if req.address: system += f"- Address: {req.address}\n"
+        if req.adu_sqft: system += f"- Planned ADU Size: {req.adu_sqft} sq ft\n"
+        if req.adu_type: system += f"- ADU Type: {req.adu_type.replace('_', ' ').title()}\n"
+        if req.primary_use: system += f"- Primary Use: {req.primary_use}\n"
+        if req.blocker_types: system += f"- Property Blockers: {', '.join(req.blocker_types)}\n"
+        system += "\nNote: Do not ask the user for this information if it is already provided above.\n\n"
+
+    system += f"**Context from the handbook:**\n\n{context}"
 
     history_text = ""
     if req.history:

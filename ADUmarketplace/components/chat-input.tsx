@@ -66,7 +66,7 @@ export function ChatInput({
             <button
               type="submit"
               disabled={!value.trim() || isLoading}
-              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-primary-foreground hover:shadow-[0_0_20px_var(--neon-cyan)] hover:scale-105 disabled:opacity-20 disabled:hover:scale-100 disabled:hover:shadow-none transition-all duration-300 cursor-pointer"
+              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:scale-105 disabled:opacity-20 disabled:hover:scale-100 disabled:hover:shadow-none transition-all duration-300 cursor-pointer"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
