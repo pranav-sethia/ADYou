@@ -619,7 +619,7 @@ export default function MapInterface() {
                                 type="range"
                                 min="200"
                                 max={result.max_adu_sqft || 1500}
-                                step="50"
+                                step="1"
                                 value={aduSize}
                                 onChange={(e) => setAduSize(parseInt(e.target.value))}
                                 className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
@@ -640,11 +640,15 @@ export default function MapInterface() {
                             </div>
                             <input
                                 type="range"
-                                min="0.3"
-                                max="3.0"
-                                step="0.1"
-                                value={aduAspectRatio}
-                                onChange={(e) => setAduAspectRatio(parseFloat(e.target.value))}
+                                min="1"
+                                max="100"
+                                step="1"
+                                value={Math.max(1, Math.min(100, (aduAspectRatio - 0.3) / 2.7 * 99 + 1))}
+                                onChange={(e) => {
+                                    const rawVal = parseInt(e.target.value);
+                                    // Map 1-100 back to 0.3-3.0 range
+                                    setAduAspectRatio(0.3 + ((rawVal - 1) / 99) * 2.7);
+                                }}
                                 disabled={aduShapeType === 'custom'}
                                 className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
                             />
@@ -660,7 +664,7 @@ export default function MapInterface() {
                                 type="range"
                                 min="0"
                                 max="360"
-                                step="5"
+                                step="1"
                                 value={aduRotation}
                                 onChange={(e) => setAduRotation(parseInt(e.target.value))}
                                 className="w-full accent-emerald-500 h-1.5 bg-slate-200 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-emerald-500 [&::-webkit-slider-thumb]:shadow-sm"
