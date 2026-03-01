@@ -1,8 +1,5 @@
 """
-Standalone RAG server for ADU Handbook.
-
-Run from repo root:
-  uvicorn rag_adu.server:app --port 8001
+API Router for ADU RAG functionality.
 """
 from __future__ import annotations
 
@@ -11,36 +8,19 @@ import math
 import os
 from pathlib import Path
 
-# Load .env from repo root so GROQ_API_KEY / GOOGLE_API_KEY are available
-try:
-    from dotenv import load_dotenv
-    repo_root = Path(__file__).resolve().parent.parent
-    # override=True ensures file values replace blank shell vars.
-    load_dotenv(repo_root / ".env", override=True)
-    # Optional fallback if user accidentally placed key in frontend env.
-    load_dotenv(repo_root / "frontend" / ".env.local", override=True)
-except ImportError:
-    pass
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+# Initialize the router
+router = APIRouter()
+
 # Paths / constants
-RAG_DIR = Path(__file__).resolve().parent
+repo_root = Path(__file__).resolve().parent.parent.parent
+RAG_DIR = repo_root / "api"
 DATA_DIR = RAG_DIR / "data"
 INDEX_PATH = DATA_DIR / "adu_index.json"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 6
-
-app = FastAPI(title="ADU RAG API", version="1.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Lazy-loaded globals
 _embedding_model = None
@@ -54,7 +34,6 @@ def get_secret(name: str) -> str | None:
         return value.strip()
 
     # Fallback parse in case env loading is blocked by shell state.
-    repo_root = Path(__file__).resolve().parent.parent
     for candidate in (repo_root / ".env", repo_root / "frontend" / ".env.local"):
         if not candidate.exists():
             continue
@@ -72,7 +51,6 @@ def get_secret(name: str) -> str | None:
 
 
 def env_diagnostics() -> dict:
-    repo_root = Path(__file__).resolve().parent.parent
     root_env = repo_root / ".env"
     fe_env = repo_root / "frontend" / ".env.local"
     return {
@@ -89,7 +67,7 @@ def get_index_entries() -> list[dict]:
         if not INDEX_PATH.exists():
             raise HTTPException(
                 status_code=503,
-                detail="RAG index not found. Run: python rag_adu/ingest.py",
+                detail="RAG index not found. Run: python api/scripts/ingest.py",
             )
         try:
             payload = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
@@ -190,9 +168,6 @@ def call_gemini(messages: list[dict]) -> str:
         )
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    # Gemini doesn't support chat-style message arrays natively in the
-    # simple generate_content API, so we flatten the conversation into a
-    # single prompt while preserving the turn structure.
     parts: list[str] = []
     for msg in messages:
         role_label = msg["role"].upper()
@@ -202,7 +177,7 @@ def call_gemini(messages: list[dict]) -> str:
     return resp.text or ""
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
@@ -256,22 +231,7 @@ def chat(req: ChatRequest) -> ChatResponse:
     return ChatResponse(answer=answer.strip(), sources=sources)
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "ADU RAG API",
-        "docs": "POST /chat with {\"message\": \"your question\"}. GET /health for health check.",
-        "chat": "/chat",
-        "health": "/health",
-    }
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.get("/debug/config")
+@router.get("/debug/config")
 def debug_config():
     # No secrets are returned; only booleans.
     return env_diagnostics()

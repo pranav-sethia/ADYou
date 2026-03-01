@@ -14,7 +14,7 @@ import type { UserProfile, PropertyContext } from "@/types";
 /*  Constants                                                         */
 /* ------------------------------------------------------------------ */
 
-const RAG_API_URL = process.env.NEXT_PUBLIC_RAG_API_URL ?? "http://localhost:8001";
+const RAG_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const STORAGE_KEY = "adu-advisor-profile";
 const MESSAGES_KEY = "adu-advisor-messages";
 
@@ -201,11 +201,11 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
 
     const greeting = propertyContext
       ? (() => {
-          const addr = propertyContext.address ?? "your property";
-          const size = propertyContext.aduSize ? `${propertyContext.aduSize} sqft` : "";
-          const shape = propertyContext.aduShape ? ` ${propertyContext.aduShape.replace("_", " ")}` : "";
-          return `I see you've analyzed **${addr}** on the map and designed a ${size}${shape} ADU — great start!\n\nI have 3 quick questions to personalize your requirements checklist and tips — takes about 30 seconds.\n\nWhat type of ADU are you looking to build?`;
-        })()
+        const addr = propertyContext.address ?? "your property";
+        const size = propertyContext.aduSize ? `${propertyContext.aduSize} sqft` : "";
+        const shape = propertyContext.aduShape ? ` ${propertyContext.aduShape.replace("_", " ")}` : "";
+        return `I see you've analyzed **${addr}** on the map and designed a ${size}${shape} ADU — great start!\n\nI have 3 quick questions to personalize your requirements checklist and tips — takes about 30 seconds.\n\nWhat type of ADU are you looking to build?`;
+      })()
       : GREETING;
 
     setMessages([
@@ -468,9 +468,8 @@ export function RAGChat({ propertyContext }: RAGChatProps) {
     <div className="relative flex h-screen">
       {/* Sidebar */}
       <div
-        className={`shrink-0 border-r border-border/60 bg-card/40 backdrop-blur-sm transition-all duration-300 ease-in-out overflow-hidden ${
-          sidebarOpen ? "w-[320px]" : "w-0"
-        }`}
+        className={`shrink-0 border-r border-border/60 bg-card/40 backdrop-blur-sm transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? "w-[320px]" : "w-0"
+          }`}
       >
         <div className="w-[320px] h-full">
           <FeasibilitySidebar userProfile={userProfile} />

@@ -1,49 +1,43 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { RAGChat } from "@/components/rag-chat";
+import { AnimatedBackground } from "@/components/animated-background";
+import { Header } from "@/components/layout/Header";
+import type { PropertyContext } from "@/types";
 
-const CHATBOT_ORIGIN = process.env.NEXT_PUBLIC_CHATBOT_ORIGIN ?? "http://localhost:3001";
-
-function ChatEmbed() {
+function ChatWithContext() {
   const sp = useSearchParams();
-  const router = useRouter();
-  const src = `${CHATBOT_ORIGIN}/adu-chat?${sp.toString()}`;
 
-  useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      if (e.data?.type === "adu-chat-finish") {
-        router.push("/");
-      }
+  const propertyContext: PropertyContext | undefined = sp.get("fromMap")
+    ? {
+      address: sp.get("address") ?? undefined,
+      lat: sp.get("lat") ? Number(sp.get("lat")) : undefined,
+      lng: sp.get("lng") ? Number(sp.get("lng")) : undefined,
+      aduSize: sp.get("aduSize") ? Number(sp.get("aduSize")) : undefined,
+      aduShape: sp.get("aduShape") ?? undefined,
+      setback: sp.get("setback") ? Number(sp.get("setback")) : undefined,
+      propertyArea: sp.get("propertyArea") ? Number(sp.get("propertyArea")) : undefined,
+      buildableArea: sp.get("buildableArea") ? Number(sp.get("buildableArea")) : undefined,
+      maxAduSqft: sp.get("maxAduSqft") ? Number(sp.get("maxAduSqft")) : undefined,
+      apn: sp.get("apn") ?? undefined,
     }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [router]);
+    : undefined;
 
-  return (
-    <iframe
-      src={src}
-      className="w-full h-full border-0"
-      allow="clipboard-write"
-    />
-  );
+  return <RAGChat propertyContext={propertyContext} />;
 }
 
 export default function ADUChatPage() {
   return (
-    <div className="h-screen w-full">
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center h-full bg-slate-50">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-slate-600 font-medium">Loading ADU Advisor...</p>
-            </div>
-          </div>
-        }
-      >
-        <ChatEmbed />
-      </Suspense>
-    </div>
+    <main className="relative h-screen overflow-hidden bg-background flex flex-col">
+      <Header />
+      {/* <AnimatedBackground /> */}
+      <div className="relative z-10 flex-1 overflow-hidden">
+        <Suspense>
+          <ChatWithContext />
+        </Suspense>
+      </div>
+    </main>
   );
 }

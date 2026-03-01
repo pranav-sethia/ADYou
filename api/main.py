@@ -48,6 +48,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from api.routers import rag
+app.include_router(rag.router)
+
 # Cost estimates
 _COST_PER_SQFT_LOW = 200.0
 _COST_PER_SQFT_HIGH = 400.0
