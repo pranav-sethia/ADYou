@@ -12,6 +12,7 @@ import Map, { Source, Layer, NavigationControl } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import * as turf from "@turf/turf";
 import type { Feature, Polygon, MultiPolygon } from "geojson";
+import { Sparkles } from "lucide-react";
 
 import ValidationHUD from "./ValidationHUD";
 import AddressSearch from "./AddressSearch";
@@ -602,9 +603,16 @@ export default function MapInterface({ initialLocation }: MapInterfaceProps) {
                                 if (result?.apn) params.set("apn", result.apn);
                                 router.push(`/adu-chat?${params}`);
                             }}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase transition-all shadow-sm ${isAduValid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200 hover:bg-emerald-200 cursor-pointer' : 'bg-rose-100 text-rose-600 border border-rose-200 cursor-not-allowed'}`}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black tracking-wider uppercase transition-all shadow-md ${isAduValid ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-400 hover:to-teal-500 hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 ring-emerald-400/50 cursor-pointer duration-300' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'}`}
                         >
-                            {isAduValid ? '✓ Plan ADU' : '⨯ Invalid'}
+                            {isAduValid ? (
+                                <>
+                                    <Sparkles className="w-4 h-4 text-emerald-100 animate-pulse" />
+                                    Plan with AI Advisor
+                                </>
+                            ) : (
+                                '⨯ Invalid'
+                            )}
                         </button>
                     </div>
 

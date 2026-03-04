@@ -1,11 +1,18 @@
 "use client"
 import { X, Building2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 import { useAuth } from "@/lib/hooks/useAuth"
 
-export function AuthModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-    const [tab, setTab] = useState<'signin' | 'signup'>('signin')
+export function AuthModal({ isOpen, onClose, defaultTab = 'signin' }: { isOpen: boolean, onClose: () => void, defaultTab?: 'signin' | 'signup' }) {
+    const [tab, setTab] = useState<'signin' | 'signup'>(defaultTab)
+
+    useEffect(() => {
+        if (isOpen) {
+            setTab(defaultTab)
+        }
+    }, [isOpen, defaultTab])
+
     const { login } = useAuth()
 
     const [email, setEmail] = useState('')

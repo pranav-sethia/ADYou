@@ -7,11 +7,31 @@ import { Button } from '@/components/ui/button'
 import { Home, Key, LogOut } from 'lucide-react'
 import { AuthModal } from '@/components/auth/AuthModal'
 
-// Simple SVG Logo Mark
 const LogoMark = () => (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-brand-600">
-        <path d="M12 3L20 10V20C20 20.5304 19.7893 21.0391 19.4142 21.4142C19.0391 21.7893 18.5304 22 18 22H6C5.46957 22 4.96086 21.7893 4.58579 21.4142C4.21071 21.0391 4 20.5304 4 20V10L12 3Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M9 22V12H15V22" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform scale-110">
+        <defs>
+            <linearGradient id="foldLeft" x1="0%" y1="100%" x2="50%" y2="0%">
+                <stop offset="0%" stopColor="#86D684" />
+                <stop offset="100%" stopColor="#55A65E" />
+            </linearGradient>
+            <linearGradient id="foldRight" x1="50%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#71C170" />
+                <stop offset="100%" stopColor="#437755" />
+            </linearGradient>
+            <linearGradient id="foldCenter" x1="20%" y1="100%" x2="80%" y2="0%">
+                <stop offset="0%" stopColor="#6BC46D" />
+                <stop offset="100%" stopColor="#8EE08D" />
+            </linearGradient>
+        </defs>
+
+        {/* Left side ribbon */}
+        <path d="M 16 85 V 42 L 50 12 L 62 20 L 46 32 L 32 45 V 85 Z" fill="url(#foldLeft)" />
+
+        {/* Right side ribbon with sweeping bottom curve */}
+        <path d="M 62 20 L 88 38 V 75 C 88 78, 80 88, 55 85 V 72 C 70 73, 74 65, 74 55 V 47 L 46 32 Z" fill="url(#foldRight)" />
+
+        {/* Center ADU geometric 'L' shape block */}
+        <path d="M 40 85 V 55 H 60 V 68 H 50 V 85 Z" fill="url(#foldCenter)" />
     </svg>
 )
 
@@ -21,6 +41,12 @@ export function Header() {
     const { user, isLoggedIn, logout } = useAuth()
     const pathname = usePathname()
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+    const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin')
+
+    const openAuthModal = (tab: 'signin' | 'signup') => {
+        setAuthModalTab(tab)
+        setIsAuthModalOpen(true)
+    }
 
     // Clean active state logic
     const isMarketplaceActive = pathname === '/marketplace' || pathname.startsWith('/marketplace/')
@@ -34,10 +60,10 @@ export function Header() {
                     {/* Logo and Main Nav */}
                     <div className="flex items-center gap-8">
                         <Link href="/" className="flex items-center gap-2 group">
-                            <div className="flex items-center justify-center p-1.5 bg-brand-50 rounded-lg group-hover:bg-brand-100 transition-colors">
+                            <div className="flex items-center justify-center group-hover:bg-brand-50 transition-colors p-1 rounded-lg">
                                 <LogoMark />
                             </div>
-                            <span className="font-extrabold text-xl tracking-tight text-surface-900 group-hover:text-brand-600 transition-colors">
+                            <span className="font-extrabold text-2xl tracking-tighter text-surface-900 group-hover:text-brand-600 transition-colors font-[family-name:var(--font-outfit)] leading-none mt-1">
                                 ADYou
                             </span>
                         </Link>
@@ -62,10 +88,10 @@ export function Header() {
                     <div className="flex items-center gap-3">
                         {!isLoggedIn ? (
                             <>
-                                <Button variant="ghost" className="hidden md:flex text-surface-600 hover:text-surface-900 font-semibold rounded-lg px-4" onClick={() => setIsAuthModalOpen(true)}>
+                                <Button variant="ghost" className="hidden md:flex text-surface-600 hover:text-surface-900 font-semibold rounded-lg px-4" onClick={() => openAuthModal('signin')}>
                                     Sign In
                                 </Button>
-                                <Button className="bg-brand-600 hover:bg-brand-700 text-surface-0 font-semibold rounded-lg shadow-sm border border-brand-700/50" onClick={() => setIsAuthModalOpen(true)}>
+                                <Button className="bg-brand-600 hover:bg-brand-700 text-surface-0 font-semibold rounded-lg shadow-sm border border-brand-700/50" onClick={() => openAuthModal('signup')}>
                                     Get Started
                                 </Button>
                             </>
@@ -106,7 +132,7 @@ export function Header() {
                 </div>
             </header>
 
-            <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+            <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} defaultTab={authModalTab} />
         </>
     )
 }
